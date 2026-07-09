@@ -726,7 +726,7 @@ class TestEncrypt(BaseTestCase):
 
     def test_encrypt_ballot_with_verify_proofs_false_passed_on(self):
         """
-        This test is for https://github.com/microsoft/electionguard-python/issues/459
+        This test is for https://github.com/Election-Tech-Initiative/electionguard-python/issues/459
         """
         with (
             patch("electionguard.encrypt.encrypt_contest") as patched_contest,

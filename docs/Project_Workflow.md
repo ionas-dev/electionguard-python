@@ -9,7 +9,7 @@ Each iteration on this repository will be tracked by a GitHub **[Milestone](http
 Each pull request **MUST** be attached to an issue. On the surface, this ensures that closing a pull request will close an issue. This also ensures the issue can be included in the milestone. For this repository, the use of issues assists the team to use the [project board]() to track the progress towards a milestone.  
 
 ### Validation
-Each pull request is validated by the [Pull Request Validation](https://github.com/microsoft/electionguard-python/blob/main/.github/workflows/pull_request.yml) GitHub [Action](https://help.github.com/en/actions). This action can be viewed from the PR or from the actions to inspect the details. 
+Each pull request is validated by the [Pull Request Validation](https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/.github/workflows/pull_request.yml) GitHub [Action](https://help.github.com/en/actions). This action can be viewed from the PR or from the actions to inspect the details. 
 
 ### Review
 All pull requests require a review from a **Contributor** but any reviewers are welcome.
@@ -24,7 +24,7 @@ At the end of an iteration aka when a milestone is complete, a release can be cr
 
 ### Release Workflow
 
-Closing the milestone queues the [Release Build](https://github.com/microsoft/electionguard-python/blob/main/.github/workflows/release.yml) GitHub [Action](https://help.github.com/en/actions). This action is designed to reduce the effort by maintainers and give the community an open view of the package flow.
+Closing the milestone queues the [Release Build](https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/.github/workflows/release.yml) GitHub [Action](https://help.github.com/en/actions). This action is designed to reduce the effort by maintainers and give the community an open view of the package flow.
 
 - Build package
 - Create dependency graph

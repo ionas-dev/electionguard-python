@@ -1,6 +1,7 @@
 from pymongo.database import Database
 
 from electionguard_gui.models.key_ceremony_dto import KeyCeremonyDto
+from electionguard_gui.models.key_ceremony_states import KeyCeremonyStates
 from electionguard_gui.services.key_ceremony_service import get_guardian_number
 from electionguard_gui.services.key_ceremony_stages.key_ceremony_stage_base import (
     KeyCeremonyStageBase,
@@ -10,6 +11,16 @@ from electionguard_gui.services.guardian_service import make_guardian
 
 class KeyCeremonyS1JoinService(KeyCeremonyStageBase):
     """Responsible for stage 1 of the key ceremony where guardians join"""
+
+    def should_run(
+        self, key_ceremony: KeyCeremonyDto, state: KeyCeremonyStates
+    ) -> bool:
+        is_guardian = not self._auth_service.is_admin()
+        return (
+            is_guardian
+            and state == KeyCeremonyStates.PendingGuardiansJoin
+            and key_ceremony.can_join
+        )
 
     def run(self, db: Database, key_ceremony: KeyCeremonyDto) -> None:
         key_ceremony_id = key_ceremony.id

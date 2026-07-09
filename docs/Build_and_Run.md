@@ -10,22 +10,10 @@ These instructions can be used to build and run the project.
 make environment
 ```
 
-OR
-
-```
-poetry install --dev
-```
-
 ### 2. Install the `electionguard` module in edit mode
 
 ```
 make install
-```
-
-OR
-
-```
-poetry run python -m pip install -e .
 ```
 
 !!! warning "Note: gmpy2 Windows Installation"
@@ -39,7 +27,7 @@ poetry run python -m pip install -e .
 
     **Alternative: Install pre-compiled binary**
 
-    _Poetry does not support `pip install --find-links`, so the `pyproject.toml` must be edited and utilize a local pre-compiled binary of the gmpy2 package._
+    _uv supports `--find-links`, so a local pre-compiled binary can be supplied without editing `pyproject.toml`._
 
     1. Determine if 64-bit:
         _The 32 vs 64 bit is based on your installed python version NOT your system._
@@ -47,24 +35,16 @@ poetry run python -m pip install -e .
     ```py
     python -c 'from sys import maxsize; print(maxsize > 2**32)'
     ```
-    2. Download [pre-compiled binary](https://www.lfd.uci.edu/~gohlke/pythonlibs/#gmpy) into project folder
-    3. Within `pyproject.toml`, replace `gmpy2` reference with direct path to downloaded file.
-    ```py
-    gmpy2 = { path = "./packages/gmpy2-2.0.8-cp39-cp39-win_amd64.whl" }
+    2. Download [pre-compiled binary](https://www.lfd.uci.edu/~gohlke/pythonlibs/#gmpy) into a `packages` folder in the project.
+    3. Run `uv sync` with the local package folder.
+    ```sh
+    uv sync --all-groups --find-links ./packages
     ```
-    3. Run `make install`
-
 
 ### 3. Validate import of module _(Optional)_
 
 ```
 make validate
-```
-
-OR
-
-```
-poetry run python -c 'import electionguard; print(electionguard.__package__ + " successfully imported")'
 ```
 
 ## Running
@@ -73,12 +53,6 @@ poetry run python -c 'import electionguard; print(electionguard.__package__ + " 
 
 ```
 make coverage
-```
-
-OR
-
-```
-poetry run coverage report
 ```
 
 ### Option 2: Run tests in VS Code
@@ -91,10 +65,4 @@ Install recommended test explorer extensions and run unit tests through tool.
 
 ```
 make test
-```
-
-OR
-
-```
-poetry run python -m pytest /tests
 ```

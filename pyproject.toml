@@ -33,47 +33,48 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://microsoft.github.io/electionguard-python"
-repository = "https://github.com/microsoft/electionguard-python"
-documentation = "https://microsoft.github.io/electionguard-python"
-"GitHub Pages" = "https://microsoft.github.io/electionguard-python"
+homepage = "https://Election-Tech-Initiative.github.io/electionguard-python"
+repository = "https://github.com/Election-Tech-Initiative/electionguard-python"
+documentation = "https://Election-Tech-Initiative.github.io/electionguard-python"
+"GitHub Pages" = "https://Election-Tech-Initiative.github.io/electionguard-python"
 "Read the Docs" = "https://electionguard-python.readthedocs.io"
-"Releases" = "https://github.com/microsoft/electionguard-python/releases"
-"Milestones" = "https://github.com/microsoft/electionguard-python/milestones"
-"Issue Tracker" = "https://github.com/microsoft/electionguard-python/issues"
+"Releases" = "https://github.com/Election-Tech-Initiative/electionguard-python/releases"
+"Milestones" = "https://github.com/Election-Tech-Initiative/electionguard-python/milestones"
+"Issue Tracker" = "https://github.com/Election-Tech-Initiative/electionguard-python/issues"
 
-[tool.poetry]
-packages = [
-  { include = "electionguard", from = "src" },
-  { include = "electionguard_tools", from = "src" },
-  { include = "electionguard_cli", from = "src" },
-  { include = "electionguard_gui", from = "src" },
+[dependency-groups]
+dev = [
+  "atomicwrites",
+  "black==25.11.0",
+  "coverage",
+  "docutils",
+  "hypothesis>=5.15.1",
+  "ipykernel>=6.4.1,<7.0.0",
+  "ipython>=7.31.1,<8.0.0",
+  "jeepney",
+  "jupyter-black>=0.3.1,<0.4.0",
+  "mkdocs>=1.6.1,<2.0.0",
+  "mkdocs-jupyter>=0.26.2,<0.27.0",
+  "mkinit",
+  "mypy==1.19.1",
+  "pydeps",
+  "pylint",
+  "pytest",
+  "secretstorage",
+  "twine",
+  "typish",
 ]
-
-[tool.poetry.group.dev.dependencies]
-atomicwrites = "*"
-black = "25.11.0"
-coverage = "*"
-docutils = "*"
-hypothesis = ">=5.15.1"
-ipython = "^7.31.1"
-ipykernel = "^6.4.1"
-jeepney = "*"
-jupyter-black = "^0.3.1"
-mkdocs = "^1.6.1"
-mkdocs-jupyter = "^0.26.2"
-mkinit = "^0.3.3"
-mypy = "1.19.1"
-pydeps = "*"
-pylint = "*"
-pytest = "*"
-secretstorage = "*"
-twine = "*"
-typish = '*'
 
 [project.scripts]
 eg = 'electionguard_cli.start:cli'
 egui = 'electionguard_gui.start:run'
+
+[build-system]
+requires = ["uv_build>=0.11.14,<0.12"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = ["electionguard", "electionguard_cli", "electionguard_gui", "electionguard_tools"]
 
 [tool.black]
 target-version = ['py39']
@@ -112,10 +113,6 @@ source = ["src/electionguard"]
 
 [tool.coverage.html]
 directory = "coverage_html_report"
-
-[build-system]
-requires = ["poetry-core>=2.0.0"]
-build-backend = "poetry.core.masonry.api"
 
 [tool.mypy]
 python_version = "3.9"

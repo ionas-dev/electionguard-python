@@ -1,4 +1,5 @@
 from os import environ
+from shutil import which
 from sys import exit
 from typing import Optional
 
@@ -15,11 +16,11 @@ class ConfigurationService:
 
     # 'chrome', 'electron', 'edge', 'custom', or 'none', see also https://github.com/ChrisKnott/Eel#app-options
     def get_mode(self) -> Optional[str]:
-        mode = self._get_param_or_default(MODE_KEY, "chrome")
+        mode = self._get_param_or_default(MODE_KEY, self._get_default_mode())
         return None if mode == "none" else mode
 
     def get_port(self) -> int:
-        return int(self._get_param_or_default(PORT_KEY, "0"))
+        return int(self._get_param_or_default(PORT_KEY, "8000"))
 
     def get_host(self) -> str:
         return str(self._get_param_or_default(HOST_KEY, "localhost"))
@@ -45,3 +46,17 @@ class ConfigurationService:
             return environ[param_name]
         except KeyError:
             return default
+
+    def _get_default_mode(self) -> str:
+        if self._has_chromium_browser():
+            return "chrome"
+        return "none"
+
+    def _has_chromium_browser(self) -> bool:
+        browser_names = [
+            "google-chrome",
+            "google-chrome-stable",
+            "chromium",
+            "chromium-browser",
+        ]
+        return any(which(browser_name) is not None for browser_name in browser_names)

@@ -2,7 +2,7 @@
 
 # 🗳 ElectionGuard Python
 
-[![ElectionGuard Specification 0.95.0](https://img.shields.io/badge/🗳%20ElectionGuard%20Specification-0.95.0-green)](https://www.electionguard.vote) ![Github Package Action](https://github.com/microsoft/electionguard-python/workflows/Release%20Build/badge.svg) [![](https://img.shields.io/pypi/v/electionguard)](https://pypi.org/project/electionguard/) [![](https://img.shields.io/pypi/dm/electionguard)](https://pypi.org/project/electionguard/) [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/microsoft/electionguard-python.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/microsoft/electionguard-python/context:python) [![Total alerts](https://img.shields.io/lgtm/alerts/g/microsoft/electionguard-python.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/microsoft/electionguard-python/alerts/) [![Documentation Status](https://readthedocs.org/projects/electionguard-python/badge/?version=latest)](https://electionguard-python.readthedocs.io) [![license](https://img.shields.io/github/license/microsoft/electionguard)](https://github.com/microsoft/electionguard-python/blob/main/LICENSE)
+[![ElectionGuard Specification 0.95.0](https://img.shields.io/badge/🗳%20ElectionGuard%20Specification-0.95.0-green)](https://www.electionguard.vote) ![Github Package Action](https://github.com/Election-Tech-Initiative/electionguard-python/workflows/Release%20Build/badge.svg) [![](https://img.shields.io/pypi/v/electionguard)](https://pypi.org/project/electionguard/) [![](https://img.shields.io/pypi/dm/electionguard)](https://pypi.org/project/electionguard/) [![Documentation Status](https://readthedocs.org/projects/electionguard-python/badge/?version=latest)](https://electionguard-python.readthedocs.io) [![license](https://img.shields.io/github/license/Election-Tech-Initiative/electionguard)](https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/LICENSE)
 
 This repository is a "reference implementation" of ElectionGuard written in Python 3. This implementation can be used to conduct End-to-End Verifiable Elections as well as privacy-enhanced risk-limiting audits. Components of this library can also be used to construct "Verifiers" to validate the results of an ElectionGuard election.
 
@@ -25,7 +25,7 @@ This repository is a "reference implementation" of ElectionGuard written in Pyth
 
 ElectionGuard is an open source software development kit (SDK) that makes voting more secure, transparent and accessible. The ElectionGuard SDK leverages homomorphic encryption to ensure that votes recorded by electronic systems of any type remain encrypted, secure, and secret. Meanwhile, ElectionGuard also allows verifiable and accurate tallying of ballots by any 3rd party organization without compromising secrecy or security.
 
-Learn More in the [ElectionGuard Repository](https://github.com/microsoft/electionguard)
+Learn More in the [ElectionGuard Repository](https://github.com/Election-Tech-Initiative/electionguard)
 
 ## 🦸 How Can I use ElectionGuard?
 
@@ -37,7 +37,7 @@ ElectionGuard supports a variety of use cases. The Primary use case is to genera
 - [GNU Make](https://www.gnu.org/software/make/manual/make.html) is used to simplify the commands and GitHub Actions. This approach is recommended to simplify the command line experience. This is built in for MacOS and Linux. For Windows, setup is simpler with [Chocolatey](https://chocolatey.org/install) and installing the provided [make package](https://chocolatey.org/packages/make). The other Windows option is [manually installing make](http://gnuwin32.sourceforge.net/packages/make.htm).
 - [Gmpy2](https://gmpy2.readthedocs.io/en/latest/) is used for [Arbitrary-precision arithmetic](https://en.wikipedia.org/wiki/Arbitrary-precision_arithmetic) which
   has its own [installation requirements (native C libraries)](https://gmpy2.readthedocs.io/en/latest/intro.html#installation) on Linux and MacOS. **⚠️ Note:** _This is not required for Windows since the gmpy2 precompiled libraries are provided._
-- [poetry 2.2.1](https://python-poetry.org/) is used to configure the python environment. Installation instructions can be found [here](https://python-poetry.org/docs/#installation).
+- [uv](https://docs.astral.sh/uv/) is used to configure the python environment. Installation instructions can be found [here](https://docs.astral.sh/uv/getting-started/installation/).
 
 ## 🚀 Quick Start
 
@@ -65,7 +65,7 @@ For more detailed build and run options, see the [documentation][build and run].
 
 Overviews:
 
-- [GitHub Pages](https://microsoft.github.io/electionguard-python/)
+- [GitHub Pages](https://Election-Tech-Initiative.github.io/electionguard-python/)
 - [Read the Docs](https://electionguard-python.readthedocs.io/)
 
 Sections:
@@ -94,7 +94,7 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 
 ### Reporting Issues
 
-Please report any bugs, feature requests, or enhancements using the [GitHub Issue Tracker](https://github.com/microsoft/electionguard-python/issues). Please do not report any security vulnerabilities using the Issue Tracker. Instead, please report them to the Microsoft Security Response Center (MSRC) at [https://msrc.microsoft.com/create-report](https://msrc.microsoft.com/create-report). See the [Security Documentation][security] for more information.
+Please report any bugs, feature requests, or enhancements using the [GitHub Issue Tracker](https://github.com/Election-Tech-Initiative/electionguard-python/issues). Please do not report any security vulnerabilities using the Issue Tracker. Instead, please report them to the Microsoft Security Response Center (MSRC) at [https://msrc.microsoft.com/create-report](https://msrc.microsoft.com/create-report). See the [Security Documentation][security] for more information.
 
 ### Have Questions?
 
@@ -126,18 +126,18 @@ A huge thank you to those who helped to contribute to this project so far, inclu
 
 <!-- Links -->
 
-[banner image]: https://raw.githubusercontent.com/microsoft/electionguard-python/main/images/electionguard-banner.svg
-[pull request workflow]: https://github.com/microsoft/electionguard-python/blob/main/.github/workflows/pull_request.yml
-[contributing]: https://github.com/microsoft/electionguard-python/blob/main/CONTRIBUTING.md
-[security]: https://github.com/microsoft/electionguard-python/blob/main/SECURITY.md
-[design and architecture]: https://github.com/microsoft/electionguard-python/blob/main/docs/Design_and_Architecture.md
-[build and run]: https://github.com/microsoft/electionguard-python/blob/main/docs/Build_and_Run.md
-[project workflow]: https://github.com/microsoft/electionguard-python/blob/main/docs/Project_Workflow.md
-[election manifest]: https://github.com/microsoft/electionguard-python/blob/main/docs/Election_Manifest.md
-[configure election]: https://github.com/microsoft/electionguard-python/blob/main/docs/0_Configure_Election.md
-[key ceremony]: https://github.com/microsoft/electionguard-python/blob/main/docs/1_Key_Ceremony.md
-[encrypt ballots]: https://github.com/microsoft/electionguard-python/blob/main/docs/2_Encrypt_Ballots.md
-[cast and spoil]: https://github.com/microsoft/electionguard-python/blob/main/docs/3_Cast_and_Spoil.md
-[decrypt tally]: https://github.com/microsoft/electionguard-python/blob/main/docs/4_Decrypt_Tally.md
-[publish and verify]: https://github.com/microsoft/electionguard-python/blob/main/docs/5_Publish_and_Verify.md
-[mit license]: https://github.com/microsoft/electionguard-python/blob/main/LICENSE
+[banner image]: https://raw.githubusercontent.com/Election-Tech-Initiative/electionguard-python/main/images/electionguard-banner.svg
+[pull request workflow]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/.github/workflows/pull_request.yml
+[contributing]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/CONTRIBUTING.md
+[security]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/SECURITY.md
+[design and architecture]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/Design_and_Architecture.md
+[build and run]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/Build_and_Run.md
+[project workflow]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/Project_Workflow.md
+[election manifest]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/Election_Manifest.md
+[configure election]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/0_Configure_Election.md
+[key ceremony]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/1_Key_Ceremony.md
+[encrypt ballots]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/2_Encrypt_Ballots.md
+[cast and spoil]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/3_Cast_and_Spoil.md
+[decrypt tally]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/4_Decrypt_Tally.md
+[publish and verify]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/docs/5_Publish_and_Verify.md
+[mit license]: https://github.com/Election-Tech-Initiative/electionguard-python/blob/main/LICENSE

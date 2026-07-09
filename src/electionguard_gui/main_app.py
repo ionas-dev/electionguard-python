@@ -104,6 +104,10 @@ class MainApp:
             port = self.config_service.get_port()
             host = self.config_service.get_host()
             self.log_service.debug(f"Starting eel port={port} mode={mode} host={host}")
+            if mode is None:
+                self.log_service.info(
+                    f"No Chrome/Chromium installation detected, open http://{host}:{port}/index.html in your browser"
+                )
             eel.start(
                 "index.html",
                 size=(1024, 768),
