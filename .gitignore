@@ -157,3 +157,5 @@ results/
 gui_private_keys/
 database/
 egui_mnt/
+Pipfile
+Pipfile.lock
