@@ -9,7 +9,7 @@ from electionguard.key_ceremony import (
 )
 from electionguard.election_polynomial import PublicCommitment
 from electionguard.elgamal import ElGamalPublicKey, HashedElGamalCiphertext
-from electionguard.schnorr import SchnorrProof
+from electionguard.schnorr_proof import SchnorrProof
 
 from electionguard_gui.eel_utils import utc_to_str
 from electionguard_gui.services.authorization_service import AuthorizationService

@@ -32,7 +32,7 @@ from .key_ceremony import (
     verify_election_partial_key_challenge,
 )
 from .logs import log_warning
-from .schnorr import SchnorrProof
+from .schnorr_proof import SchnorrProof
 from .tally import CiphertextTally
 from .type import BallotId, GuardianId
 

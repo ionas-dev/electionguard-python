@@ -1,45 +1,46 @@
 import importlib.metadata
 
 # <AUTOGEN_INIT>
-from electionguard import ballot
-from electionguard import ballot_box
-from electionguard import ballot_code
-from electionguard import ballot_compact
-from electionguard import ballot_validator
-from electionguard import big_integer
-from electionguard import byte_padding
-from electionguard import chaum_pedersen
-from electionguard import constants
-from electionguard import data_store
-from electionguard import decrypt_with_secrets
-from electionguard import decrypt_with_shares
-from electionguard import decryption
-from electionguard import decryption_mediator
-from electionguard import decryption_share
-from electionguard import discrete_log
-from electionguard import election
-from electionguard import election_object_base
-from electionguard import election_polynomial
-from electionguard import elgamal
-from electionguard import encrypt
-from electionguard import group
-from electionguard import guardian
-from electionguard import hash
-from electionguard import hmac
-from electionguard import key_ceremony
-from electionguard import key_ceremony_mediator
-from electionguard import logs
-from electionguard import manifest
-from electionguard import nonces
-from electionguard import proof
-from electionguard import scheduler
-from electionguard import schnorr
-from electionguard import serialize
-from electionguard import singleton
-from electionguard import tally
-from electionguard import type
-from electionguard import utils
-
+from electionguard import (
+    ballot,
+    ballot_box,
+    ballot_code,
+    ballot_compact,
+    ballot_validator,
+    big_integer,
+    byte_padding,
+    chaum_pedersen,
+    constants,
+    data_store,
+    decrypt_with_secrets,
+    decrypt_with_shares,
+    decryption,
+    decryption_mediator,
+    decryption_share,
+    discrete_log,
+    election,
+    election_object_base,
+    election_polynomial,
+    elgamal,
+    encrypt,
+    group,
+    guardian,
+    hash,
+    hmac,
+    key_ceremony,
+    key_ceremony_mediator,
+    logs,
+    manifest,
+    nonces,
+    proof,
+    scheduler,
+    schnorr_proof,
+    serialize,
+    singleton,
+    tally,
+    type,
+    utils,
+)
 from electionguard.ballot import (
     BallotBoxState,
     CiphertextBallot,
@@ -70,10 +71,10 @@ from electionguard.ballot_code import (
     get_hash_for_device,
 )
 from electionguard.ballot_compact import (
-    CompactPlaintextBallot,
-    CompactSubmittedBallot,
     NO_VOTE,
     YES_VOTE,
+    CompactPlaintextBallot,
+    CompactSubmittedBallot,
     compress_plaintext_ballot,
     compress_submitted_ballot,
     expand_compact_plaintext_ballot,
@@ -108,12 +109,12 @@ from electionguard.chaum_pedersen import (
 )
 from electionguard.constants import (
     EXTRA_SMALL_TEST_CONSTANTS,
-    ElectionConstants,
     LARGE_TEST_CONSTANTS,
     MEDIUM_TEST_CONSTANTS,
-    PrimeOption,
     SMALL_TEST_CONSTANTS,
     STANDARD_CONSTANTS,
+    ElectionConstants,
+    PrimeOption,
     create_constants,
     get_cofactor,
     get_constants,
@@ -231,19 +232,19 @@ from electionguard.encrypt import (
     selection_from,
 )
 from electionguard.group import (
-    BaseElement,
-    ElementModP,
-    ElementModPOrQ,
-    ElementModPOrQorInt,
-    ElementModPorInt,
-    ElementModQ,
-    ElementModQorInt,
     ONE_MOD_P,
     ONE_MOD_Q,
     TWO_MOD_P,
     TWO_MOD_Q,
     ZERO_MOD_P,
     ZERO_MOD_Q,
+    BaseElement,
+    ElementModP,
+    ElementModPorInt,
+    ElementModPOrQ,
+    ElementModPOrQorInt,
+    ElementModQ,
+    ElementModQorInt,
     a_minus_b_q,
     a_plus_bc_q,
     add_q,
@@ -271,10 +272,10 @@ from electionguard.guardian import (
     publish_guardian_record,
 )
 from electionguard.hash import (
-    CryptoHashCheckable,
     CryptoHashable,
     CryptoHashableAll,
     CryptoHashableT,
+    CryptoHashCheckable,
     hash_elems,
 )
 from electionguard.hmac import (
@@ -303,9 +304,9 @@ from electionguard.key_ceremony_mediator import (
     KeyCeremonyMediator,
 )
 from electionguard.logs import (
-    ElectionGuardLog,
     FORMAT,
     LOG,
+    ElectionGuardLog,
     get_file_handler,
     get_stream_handler,
     log_add_handler,
@@ -318,6 +319,7 @@ from electionguard.logs import (
     log_warning,
 )
 from electionguard.manifest import (
+    SUPPORTED_VOTE_VARIATIONS,
     AnnotatedString,
     BallotStyle,
     Candidate,
@@ -334,7 +336,6 @@ from electionguard.manifest import (
     Party,
     ReferendumContestDescription,
     ReportingUnitType,
-    SUPPORTED_VOTE_VARIATIONS,
     SelectionDescription,
     SpecVersion,
     VoteVariationType,
@@ -353,7 +354,7 @@ from electionguard.proof import (
 from electionguard.scheduler import (
     Scheduler,
 )
-from electionguard.schnorr import (
+from electionguard.schnorr_proof import (
     SchnorrProof,
     make_schnorr_proof,
 )
@@ -722,7 +723,7 @@ __all__ = [
     "reconstruct_decryption_share_for_ballot",
     "remove_padding",
     "scheduler",
-    "schnorr",
+    "schnorr_proof",
     "selection_from",
     "selection_is_valid_for_style",
     "sequence_order_sort",

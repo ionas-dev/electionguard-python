@@ -1,11 +1,10 @@
 from dataclasses import dataclass
-from typing import List, Type, TypeVar, Optional
+from typing import List, Optional, Type, TypeVar
 
-from .serialize import padded_decode, padded_encode
 from .election_polynomial import (
+    ElectionPolynomial,
     PublicCommitment,
     compute_polynomial_coordinate,
-    ElectionPolynomial,
     generate_polynomial,
     verify_polynomial_coordinate,
 )
@@ -18,7 +17,8 @@ from .elgamal import (
 )
 from .group import ElementModQ, rand_q
 from .hash import hash_elems
-from .schnorr import SchnorrProof
+from .schnorr_proof import SchnorrProof
+from .serialize import padded_decode, padded_encode
 from .type import (
     GuardianId,
     VerifierId,

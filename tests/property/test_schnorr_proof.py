@@ -1,31 +1,30 @@
-from hypothesis import given, assume
-
-from tests.base_test_case import BaseTestCase
+from hypothesis import assume, given
 
 from electionguard.constants import get_large_prime
 from electionguard.elgamal import ElGamalKeyPair, elgamal_keypair_from_secret
 from electionguard.group import (
-    ElementModQ,
-    ElementModP,
-    ZERO_MOD_P,
-    TWO_MOD_Q,
     ONE_MOD_Q,
+    TWO_MOD_Q,
+    ZERO_MOD_P,
+    ElementModP,
+    ElementModQ,
 )
-from electionguard.schnorr import (
-    make_schnorr_proof,
+from electionguard.schnorr_proof import (
     SchnorrProof,
+    make_schnorr_proof,
 )
 from electionguard.utils import get_optional
 from electionguard_tools.strategies.elgamal import elgamal_keypairs
 from electionguard_tools.strategies.group import (
-    elements_mod_q,
-    elements_mod_p_no_zero,
     elements_mod_p,
+    elements_mod_p_no_zero,
+    elements_mod_q,
 )
+from tests.base_test_case import BaseTestCase
 
 
-class TestSchnorr(BaseTestCase):
-    """Schnorr tests"""
+class TestSchnorrProof(BaseTestCase):
+    """Schnorr proof tests"""
 
     def test_schnorr_proofs_simple(self) -> None:
         # doesn't get any simpler than this

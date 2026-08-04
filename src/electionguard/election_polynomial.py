@@ -3,20 +3,20 @@ from typing import Dict, List, Optional
 
 from .elgamal import ElGamalKeyPair
 from .group import (
-    add_q,
+    ONE_MOD_P,
+    ZERO_MOD_Q,
     ElementModP,
     ElementModQ,
-    g_pow_p,
+    add_q,
     div_q,
+    g_pow_p,
     mult_p,
     mult_q,
-    ONE_MOD_P,
     pow_p,
     pow_q,
     rand_q,
-    ZERO_MOD_Q,
 )
-from .schnorr import make_schnorr_proof, SchnorrProof
+from .schnorr_proof import SchnorrProof, make_schnorr_proof
 from .type import GuardianId
 
 SecretCoefficient = ElementModQ  # Secret coefficient of election polynomial
