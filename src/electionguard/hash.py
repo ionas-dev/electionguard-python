@@ -5,19 +5,21 @@ from hashlib import sha256
 from typing import (
     Iterable,
     List,
-    Union,
     Protocol,
+    Union,
     runtime_checkable,
+)
+from typing import (
     Sequence as TypedSequence,
 )
 
 from .constants import get_small_prime
-from .utils import BYTE_ENCODING, BYTE_ORDER
 from .group import (
+    ElementModP,
     ElementModPOrQ,
     ElementModQ,
-    ElementModP,
 )
+from .utils import BYTE_ENCODING, BYTE_ORDER
 
 
 @runtime_checkable
@@ -57,18 +59,40 @@ CryptoHashableAll = Union[
     CryptoHashableT,
 ]
 
+DOMAIN_TAG_DEF = b"ElectionGuard-EV/MuSig/def/v1"
+DOMAIN_TAG_AGG = b"ElectionGuard-EV/MuSig/agg/v1"
+DOMAIN_TAG_SIG = b"ElectionGuard-EV/MuSig/sig/v1"
+
 
 def hash_elems(*a: CryptoHashableAll) -> ElementModQ:
+    return hash_elems_with_tag(DOMAIN_TAG_DEF, *a)
+
+def hash_elems_agg(*a: CryptoHashableAll) -> ElementModQ:
+    return hash_elems_with_tag(DOMAIN_TAG_AGG)
+
+def hash_elems_sig(*a: CryptoHashableAll) -> ElementModQ:
+    return hash_elems_with_tag(DOMAIN_TAG_SIG)
+
+def hash_elems_with_tag(tag: bytes, *a: CryptoHashableAll) -> ElementModQ:
     """
     Given zero or more elements, calculate their cryptographic hash
-    using SHA256. Allowed element types are `ElementModP`, `ElementModQ`,
+    using SHA256 using a tag to separate domains. Allowed element types are `ElementModP`, `ElementModQ`,
     `str`, or `int`, anything implementing `CryptoHashable`, and lists
     or optionals of any of those types.
 
+    :param tag: a byte string to represent separate hash domains.
     :param a: Zero or more elements of any of the accepted types.
     :return: A cryptographic hash of these elements, concatenated.
     """
+
+    # Hash tag to have fixed size (32 bytes)
+    hashed_tag = sha256(tag).digest()
+
+    # Update hash with one full size block for the tag (64 bytes)
     h = sha256()
+    h.update(hashed_tag)
+    h.update(hashed_tag)
+
     h.update("|".encode(BYTE_ENCODING))
     for x in a:
         # We could just use str(x) for everything, but then we'd have a resulting string
