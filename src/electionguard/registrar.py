@@ -1,17 +1,24 @@
-from dataclasses import dataclass, field
-from typing import Generator, Optional
+from dataclasses import dataclass
+from typing import Optional
 
+from electionguard.eligibility_roll import EligibilityRoll
 from electionguard.group import ElementModQ, add_q, g_pow_p, rand_q
 from electionguard.schnorr_signature import SchnorrKeyPair
-from electionguard.type import RegistrarId
 
-EligibilityRoll = list[str]
 
 @dataclass
 class Registrar:
     eligibility_roll: EligibilityRoll
-    credentials: dict[int, SchnorrKeyPair]
+    """The eligibility roll containing the list of eligible voters."""
+
+    credentials: dict[str, SchnorrKeyPair]
+    """A dictionary mapping voter ids to their corresponding Schnorr key pairs (credentials)."""
+
     nonce: Optional[ElementModQ] = None
+    """
+    An optional nonce used in the generation of credentials.
+    If provided, it will be combined with the voter id to create a unique secret key for each voter.
+    """
 
     def __init__(self, eligibility_roll: EligibilityRoll, nonce: Optional[ElementModQ] = None) -> None:
         self.eligibility_roll = eligibility_roll
@@ -20,37 +27,34 @@ class Registrar:
 
     def publish_public_crendentials(self) -> list[SchnorrKeyPair]:
         """Publishes the public credentials for each voter in the eligibility roll."""
-        return [self.credentials[id] for id in range(len(self.eligibility_roll))]
 
-    def send_credential_to_voter(self, id: int) -> SchnorrKeyPair:
+        return [self.credentials[voter.object_id] for voter in self.eligibility_roll.voters]
+
+    def send_credential_to_voter(self, id: str) -> SchnorrKeyPair:
         """""Sends the credential to a voter based on their ID."""
-        if id < 0 or id >= len(self.eligibility_roll):
+
+        if id in self.credentials:
             raise ValueError("Invalid voter ID")
 
         return self.credentials[id]
 
-
-    def generate_credentials(self) -> list[SchnorrKeyPair]:
+    def generate_credentials(self):
         """Generates a Schnorr key pair for each voter in the eligibility roll."""
 
-        credentials = []
+        nonce = rand_q()
 
-        for id in range(len(self.eligibility_roll)):
-            credential = self.generate_credentials_for_voter(id)
-            credentials.append(credential)
-        return credentials
+        for (i, voter) in enumerate(self.eligibility_roll.voters):
+            nonce = add_q(nonce, i)
+            credential = self.generate_credential(nonce)
 
+            voter_id = voter.object_id
+            self.credentials[voter_id] = credential
 
-    def generate_credentials_for_voter(self, id: int) -> SchnorrKeyPair:
-        """Generates a Schnorr key pair for a given voter ID."""
-        if id < 0 or id >= len(self.eligibility_roll):
-            raise ValueError("Invalid voter ID")
+    def generate_credential(self, nonce: Optional[ElementModQ] = None) -> SchnorrKeyPair:
+        """Generates one Schnorr key pair"""
 
-        # TODO: Nonce seqqeunce wie bei encrypt
-        secret_key = add_q(self.nonce, id) if self.nonce is not None else rand_q()
+        secret_key = nonce if nonce is not None else rand_q()
         public_key = g_pow_p(secret_key)
 
         keypair = SchnorrKeyPair(secret_key, public_key)
-
-        self.credentials[id] = keypair
         return keypair
