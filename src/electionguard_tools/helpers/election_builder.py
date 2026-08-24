@@ -14,7 +14,6 @@ from electionguard.utils import get_optional
 
 
 @dataclass
-# TODO: number of registrars bringt nur was bei der erweituerung
 class ElectionBuilder:
     """
     `ElectionBuilder` is a stateful builder object that constructs `CiphertextElectionContext` objects
@@ -30,12 +29,13 @@ class ElectionBuilder:
     The quorum of guardians necessary to decrypt an election. Must be fewer than `number_of_guardians`
     """
 
-    number_of_registrars: int
-    """
-    The number of registrars necessary to generate the credentials
-    """
-
     manifest: Manifest
+
+    number_of_registrars: int = 0
+    """
+    The number of registrars necessary to generate the credentials.
+    Defaults to 0 for elections that don't use the optional registrar/ballot-signing extension.
+    """
 
     internal_manifest: InternalManifest = field(init=False)
 
@@ -95,12 +95,12 @@ class ElectionBuilder:
         return (
             self.internal_manifest,
             make_ciphertext_election_context(
-                self.number_of_guardians,
-                self.quorum,
-                self.number_of_registrars,
-                get_optional(self.election_key),
-                get_optional(self.commitment_hash),
-                self.manifest.crypto_hash(),
+                number_of_guardians=self.number_of_guardians,
+                quorum=self.quorum,
+                elgamal_public_key=get_optional(self.election_key),
+                commitment_hash=get_optional(self.commitment_hash),
+                manifest_hash=self.manifest.crypto_hash(),
+                number_of_registrars=self.number_of_registrars,
                 extended_data=self.extended_data,
             ),
         )

@@ -162,7 +162,7 @@ class TestEndToEndElection(BaseTestCase):
 
         # Create an Election Builder
         self.election_builder = ElectionBuilder(
-            self.NUMBER_OF_GUARDIANS, self.QUORUM, 0, self.manifest
+            self.NUMBER_OF_GUARDIANS, self.QUORUM, self.manifest
         )
         self._assert_message(
             ElectionBuilder.__qualname__,

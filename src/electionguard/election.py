@@ -52,11 +52,6 @@ class CiphertextElectionContext:
     The quorum of guardians necessary to decrypt an election.  Must be fewer than `number_of_guardians`
     """
 
-    number_of_registrars: int
-    """
-    The number of registrars necessary to generate the credentials
-    """
-
     elgamal_public_key: ElGamalPublicKey
     """the `joint public key (K)` in the specification"""
 
@@ -78,6 +73,12 @@ class CiphertextElectionContext:
     extended_data: Optional[Dict[str, str]]
     """Data to allow extending the context for special cases."""
 
+    number_of_registrars: int = 0
+    """
+    The number of registrars necessary to generate the credentials.
+    Defaults to 0 for elections that don't use the optional registrar/ballot-signing extension.
+    """
+
     configuration: Configuration = field(default_factory=Configuration)
     """Configuration for the election edge cases."""
 
@@ -92,10 +93,10 @@ class CiphertextElectionContext:
 def make_ciphertext_election_context(
     number_of_guardians: int,
     quorum: int,
-    number_of_registrars: int,
     elgamal_public_key: ElGamalPublicKey,
     commitment_hash: ElementModQ,
     manifest_hash: ElementModQ,
+    number_of_registrars: int = 0,
     extended_data: Optional[Dict[str, str]] = None,
 ) -> CiphertextElectionContext:
     """
@@ -103,10 +104,11 @@ def make_ciphertext_election_context(
 
     :param number_of_guardians: The number of guardians necessary to generate the public key
     :param quorum: The quorum of guardians necessary to decrypt an election.  Must be fewer than `number_of_guardians`
-    :param number_of_registrars: The number of registrars necessary to generate the credentials
     :param elgamal_public_key: the public key of the election
     :param commitment_hash: the hash of the commitments the guardians make to each other
     :param manifest_hash: the hash of the election metadata
+    :param number_of_registrars: The number of registrars necessary to generate the credentials.
+        Defaults to 0; only relevant for elections using the optional registrar/ballot-signing extension.
     """
 
     # What's a crypto_base_hash?
@@ -137,13 +139,13 @@ def make_ciphertext_election_context(
     )
     crypto_extended_base_hash = hash_elems(crypto_base_hash, commitment_hash)
     return CiphertextElectionContext(
-        number_of_guardians,
-        quorum,
-        number_of_registrars,
-        elgamal_public_key,
-        commitment_hash,
-        manifest_hash,
-        crypto_base_hash,
-        crypto_extended_base_hash,
-        extended_data,
+        number_of_guardians=number_of_guardians,
+        quorum=quorum,
+        elgamal_public_key=elgamal_public_key,
+        commitment_hash=commitment_hash,
+        manifest_hash=manifest_hash,
+        crypto_base_hash=crypto_base_hash,
+        crypto_extended_base_hash=crypto_extended_base_hash,
+        extended_data=extended_data,
+        number_of_registrars=number_of_registrars,
     )
