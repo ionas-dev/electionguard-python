@@ -73,10 +73,10 @@ def hash_elems(*a: CryptoHashableAll) -> ElementModQ:
     return hash_elems_with_tag(None, *a)
 
 def hash_elems_agg(*a: CryptoHashableAll) -> ElementModQ:
-    return hash_elems_with_tag(DOMAIN_TAG_AGG)
+    return hash_elems_with_tag(DOMAIN_TAG_AGG, *a)
 
 def hash_elems_sig(*a: CryptoHashableAll) -> ElementModQ:
-    return hash_elems_with_tag(DOMAIN_TAG_SIG)
+    return hash_elems_with_tag(DOMAIN_TAG_SIG, *a)
 
 def hash_elems_with_tag(tag: Optional[bytes], *a: CryptoHashableAll) -> ElementModQ:
     """
