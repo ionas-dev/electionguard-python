@@ -1,5 +1,7 @@
+from typing import Optional
+
 from electionguard.eligibility_roll import EligibilityRoll
-from electionguard.group import g_pow_p, rand_q
+from electionguard.group import ElementModQ, g_pow_p, rand_q
 from electionguard.manifest import ContactInformation
 from electionguard.registrar import Registrar
 from electionguard.voter import Voter
@@ -21,7 +23,7 @@ def _roll(*voter_ids: str) -> EligibilityRoll:
     )
 
 
-def _registrar(roll: EligibilityRoll, nonce=None) -> Registrar:
+def _registrar(roll: EligibilityRoll, nonce: Optional[ElementModQ] = None) -> Registrar:
     return Registrar("registrar-1", 0, roll, nonce=nonce)
 
 
