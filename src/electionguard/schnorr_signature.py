@@ -39,11 +39,11 @@ class SchnorrSignature:
         pubkey_pow_challenge = pow_p(public_key, self.challenge)
         recovered_commitment = div_p(g_pow_response, pubkey_pow_challenge)
 
-        computed_challenge = hash_elems_sig(recovered_commitment, message)
+        computed_challenge = hash_elems_sig(public_key, recovered_commitment, message)
         return computed_challenge == self.challenge
 
 
-def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrKeyPair) -> Optional[SchnorrSignature]:
+def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrKeyPair) -> SchnorrSignature:
     """Sign a message using the Schnorr signature scheme."""
     commitment = g_pow_p(nonce)
     challenge = hash_elems_sig(key_pair.public_key, commitment, message)
@@ -52,17 +52,17 @@ def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrK
     return SchnorrSignature(challenge, response)
 
 
-def schnorr_keypair_from_secret(a: SchnorrSecretKey) -> Optional[SchnorrKeyPair]:
+def schnorr_keypair_from_secret(secret_key: SchnorrSecretKey) -> Optional[SchnorrKeyPair]:
     """
     Given an Schnorr secret key (typically, a random number in [2,Q)), returns
     an Schnorr keypair, consisting of the given secret key a and public key g^a.
     """
-    secret_key_int = a
-    if secret_key_int < 2:
+
+    if secret_key < 2:
         log_error("ElGamal secret key needs to be in [2,Q).")
         return None
 
-    return SchnorrKeyPair(a, g_pow_p(a))
+    return SchnorrKeyPair(secret_key, g_pow_p(secret_key))
 
 
 def schnorr_keypair_random() -> SchnorrKeyPair:
