@@ -1052,6 +1052,9 @@ class SignedBallot(CiphertextBallot):
     signature: SchnorrSignature
     public_credential: SchnorrPublicKey
 
+    def verify_signature(self) -> bool:
+        return self.signature.verify(self.public_credential, self.crypto_hash)
+
 def make_ciphertext_signed_ballot(
     ballot: CiphertextBallot,
     signature: SchnorrSignature,

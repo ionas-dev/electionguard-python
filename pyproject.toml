@@ -121,3 +121,12 @@ warn_unused_configs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
 show_column_numbers = true
+
+# unittest.TestCase's setUp() is the idiomatic place to assign fixture attributes across this
+# test suite, but basedpyright only recognizes __init__ (or class-body defaults) as
+# initialization, so it flags every setUp-assigned attribute. Disabled project-wide rather than
+# scoped to tests/ via executionEnvironments, since scoping the root there broke resolution of
+# local imports like `tests.base_test_case` (executionEnvironments replaces the search path
+# instead of extending it).
+[tool.basedpyright]
+reportUninitializedInstanceVariable = false
