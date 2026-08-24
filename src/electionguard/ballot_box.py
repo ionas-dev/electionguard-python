@@ -1,11 +1,15 @@
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+from electionguard.sign import SignedBallot
+
 from .ballot import (
     BallotBoxState,
     CiphertextBallot,
+    SignedSubmittedBallot,
     SubmittedBallot,
     make_ciphertext_submitted_ballot,
+    make_signed_submitted_ballot,
 )
 from .ballot_validator import ballot_is_valid_for_election
 from .data_store import DataStore
@@ -22,6 +26,7 @@ class BallotBox:
     _internal_manifest: InternalManifest = field()
     _encryption: CiphertextElectionContext = field()
     _store: DataStore = field(default_factory=lambda: DataStore())
+    _signed_store: DataStore = field(default_factory=lambda: DataStore())
 
     def cast(self, ballot: CiphertextBallot) -> Optional[SubmittedBallot]:
         """Cast a specific encrypted `CiphertextBallot`."""
@@ -33,6 +38,17 @@ class BallotBox:
             self._store,
         )
 
+    def cast_signed(self, ballot: SignedBallot) -> Optional[SignedSubmittedBallot]:
+        """Cast a specific encrypted `CiphertextBallot`."""
+        return submit_signed_ballot_to_box(
+            ballot,
+            BallotBoxState.CAST,
+            self._internal_manifest,
+            self._encryption,
+            self._store,
+            self._signed_store,
+        )
+
     def spoil(self, ballot: CiphertextBallot) -> Optional[SubmittedBallot]:
         """Spoil a specific encrypted `CiphertextBallot`."""
         return submit_ballot_to_box(
@@ -42,6 +58,48 @@ class BallotBox:
             self._encryption,
             self._store,
         )
+
+
+def submit_signed_ballot_to_box(
+    ballot: SignedBallot,
+    state: BallotBoxState,
+    internal_manifest: InternalManifest,
+    context: CiphertextElectionContext,
+    store: DataStore,
+    signature_store: DataStore,
+) -> Optional[SignedSubmittedBallot]:
+    """
+    Submit a ballot within the context of a specified election and against an existing data store
+    Verified that the ballot is valid for the election `internal_manifest` and `context` and
+    that the ballot has not already been cast or spoiled.
+    :return: a `SubmittedBallot` or `None` if there was an error
+    """
+    if not ballot_is_valid_for_election(ballot, internal_manifest, context, True):
+        log_warning(f"ballot: {ballot.object_id} failed validity check")
+        return None
+
+    existing_ballot = store.get(ballot.object_id)
+    if existing_ballot is not None:
+        log_warning(
+            f"error accepting ballot, {ballot.object_id} already exists with state: {existing_ballot.state}"
+        )
+        return None
+
+    # TODO: ISSUE #56: check if the ballot includes the nonce, and regenerate the proofs
+    # TODO: ISSUE #56: check if the ballot includes the proofs, if it does not include the nonce
+
+    existing_ballot = store.get(ballot.public_credential)
+    if existing_ballot is not None:
+        log_warning(
+            f"error accepting ballot, {ballot.object_id} already exists with state: {existing_ballot.state}"
+        )
+        return None
+
+    ballot_box_ballot = submit_ballot(ballot, state)
+
+    store.set(ballot.object_id, ballot_box_ballot)
+    store.set(ballot.public_credential, ballot_box_ballot)
+    return store.get(ballot_box_ballot.object_id)
 
 
 def submit_ballot_to_box(
@@ -106,6 +164,26 @@ def submit_ballot(
         state,
     )
 
+def submit_signed_ballot(
+    ballot: SignedBallot, state: BallotBoxState = BallotBoxState.UNKNOWN
+) -> SignedSubmittedBallot:
+    """
+    Convert a `CiphertextBallot` into a `SubmittedBallot`, with all nonces removed.
+    """
+
+    return make_signed_submitted_ballot(
+        ballot.object_id,
+        ballot.style_id,
+        ballot.manifest_hash,
+        ballot.code_seed,
+        ballot.contests,
+        ballot.code,
+        ballot.signature,
+        ballot.public_credential,
+        ballot.timestamp,
+        state,
+    )
+
 
 def cast_ballot(ballot: CiphertextBallot) -> SubmittedBallot:
     """
@@ -113,6 +191,16 @@ def cast_ballot(ballot: CiphertextBallot) -> SubmittedBallot:
     Declare a ballot as CAST.
     """
     return submit_ballot(
+        ballot,
+        BallotBoxState.CAST,
+    )
+
+def cast_signed_ballot(ballot: SignedBallot) -> SubmittedBallot:
+    """
+    Convert a `CiphertextBallot` into a `SubmittedBallot`, with all nonces removed.
+    Declare a ballot as CAST.
+    """
+    return submit_signed_ballot(
         ballot,
         BallotBoxState.CAST,
     )

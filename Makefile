@@ -103,6 +103,10 @@ test-example:
 	@echo ✅ TEST Example
 	uv run --locked pytest -s tests/integration/test_end_to_end_election.py
 
+test-example-signed:
+	@echo ✅ TEST Example with Signed Ballots
+	uv run --locked pytest -s tests/integration/test_extended_end_to_end_election.py
+
 # Coverage
 coverage:
 	@echo ✅ COVERAGE

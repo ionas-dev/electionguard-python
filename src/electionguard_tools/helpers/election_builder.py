@@ -3,18 +3,18 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple
 
-from electionguard.elgamal import ElGamalPublicKey
-
 from electionguard.election import (
     CiphertextElectionContext,
     make_ciphertext_election_context,
 )
+from electionguard.elgamal import ElGamalPublicKey
 from electionguard.group import ElementModQ
-from electionguard.manifest import Manifest, InternalManifest
+from electionguard.manifest import InternalManifest, Manifest
 from electionguard.utils import get_optional
 
 
 @dataclass
+# TODO: number of registrars bringt nur was bei der erweituerung
 class ElectionBuilder:
     """
     `ElectionBuilder` is a stateful builder object that constructs `CiphertextElectionContext` objects
@@ -27,7 +27,12 @@ class ElectionBuilder:
     """
     quorum: int
     """
-    The quorum of guardians necessary to decrypt an election.  Must be fewer than `number_of_guardians`
+    The quorum of guardians necessary to decrypt an election. Must be fewer than `number_of_guardians`
+    """
+
+    number_of_registrars: int
+    """
+    The number of registrars necessary to generate the credentials
     """
 
     manifest: Manifest
@@ -92,6 +97,7 @@ class ElectionBuilder:
             make_ciphertext_election_context(
                 self.number_of_guardians,
                 self.quorum,
+                self.number_of_registrars,
                 get_optional(self.election_key),
                 get_optional(self.commitment_hash),
                 self.manifest.crypto_hash(),

@@ -5,13 +5,14 @@ from functools import cached_property, reduce
 from typing import (
     Any,
     Dict,
-    List,
     Iterable,
+    List,
     Optional,
     Protocol,
     runtime_checkable,
 )
 
+from electionguard.schnorr_signature import SchnorrPublicKey, SchnorrSignature
 
 from .ballot_code import get_ballot_code
 from .chaum_pedersen import (
@@ -23,8 +24,8 @@ from .chaum_pedersen import (
 from .election_object_base import (
     ElectionObjectBase,
     OrderedObjectBase,
-    sequence_order_sort,
     list_eq,
+    sequence_order_sort,
 )
 from .elgamal import (
     ElGamalCiphertext,
@@ -32,7 +33,7 @@ from .elgamal import (
     HashedElGamalCiphertext,
     elgamal_add,
 )
-from .group import add_q, ElementModQ, ZERO_MOD_Q
+from .group import ZERO_MOD_Q, ElementModQ, add_q
 from .hash import CryptoHashCheckable, hash_elems
 from .logs import log_warning
 from .manifest import ContestDescription
@@ -1043,5 +1044,114 @@ def make_ciphertext_submitted_ballot(
         timestamp,
         contest_hash,
         None,
+        state,
+    )
+
+@dataclass(unsafe_hash=True)
+class SignedBallot(CiphertextBallot):
+    signature: SchnorrSignature
+    public_credential: SchnorrPublicKey
+
+def make_ciphertext_signed_ballot(
+    ballot: CiphertextBallot,
+    signature: SchnorrSignature,
+    public_credential: SchnorrPublicKey
+) -> SignedBallot:
+    return SignedBallot(
+        ballot.object_id,
+        ballot.style_id,
+        ballot.manifest_hash,
+        ballot.code_seed,
+        ballot.contests,
+        ballot.code,
+        ballot.timestamp,
+        ballot.crypto_hash,
+        ballot.nonce,
+        signature,
+        public_credential
+    )
+
+@dataclass(unsafe_hash=True)
+class SignedSubmittedBallot(SignedBallot):
+    """
+    A `SubmittedBallot` represents a ballot that is submitted for inclusion in election results.
+    A submitted ballot is or is about to be either cast or spoiled.
+    The state supports the `BallotBoxState.UNKNOWN` enumeration to indicate that this object is mutable
+    and has not yet been explicitly assigned a specific state.
+
+    Note, additionally, this ballot includes all proofs but no nonces.
+
+    Do not make this class directly. Use `make_ciphertext_submitted_ballot` instead.
+    """
+
+    state: BallotBoxState
+
+    def __eq__(self, other: Any) -> bool:
+        return (
+            isinstance(other, SubmittedBallot)
+            and super().__eq__(other)
+            and self.state == other.state
+        )
+
+    def __ne__(self, other: Any) -> bool:
+        return not self.__eq__(other)
+
+def make_signed_submitted_ballot(
+    object_id: str,
+    style_id: str,
+    manifest_hash: ElementModQ,
+    code_seed: Optional[ElementModQ],
+    contests: List[CiphertextBallotContest],
+    ballot_code: Optional[ElementModQ],
+    signature: SchnorrSignature,
+    public_credential: SchnorrPublicKey,
+    timestamp: Optional[int] = None,
+    state: BallotBoxState = BallotBoxState.UNKNOWN,
+) -> SignedSubmittedBallot:
+    """
+    Makes a `SubmittedBallot`, ensuring that no nonces are part of the contests.
+
+    :param object_id: the object_id of this specific ballot
+    :param style_id: The `object_id` of the `BallotStyle` in the `Election` Manifest
+    :param manifest_hash: Hash of the election manifest
+    :param code_seed: Seed for ballot code
+    :param contests: List of contests for this ballot
+    :param timestamp: Timestamp at which the ballot encryption is generated in tick
+    :param state: ballot box state
+    """
+
+    if len(contests) == 0:
+        log_warning("ciphertext ballot with no contests")
+
+    contest_hashes = [contest.crypto_hash for contest in sequence_order_sort(contests)]
+    contest_hash = hash_elems(object_id, manifest_hash, *contest_hashes)
+
+    timestamp = to_ticks(datetime.now(timezone.utc)) if timestamp is None else timestamp
+    if code_seed is None:
+        code_seed = manifest_hash
+    if ballot_code is None:
+        ballot_code = get_ballot_code(code_seed, timestamp, contest_hash)
+
+    # copy the contests and selections, removing all nonces
+    new_contests: List[CiphertextBallotContest] = []
+    for contest in contests:
+        new_selections = [
+            replace(selection, nonce=None) for selection in contest.ballot_selections
+        ]
+        new_contest = replace(contest, nonce=None, ballot_selections=new_selections)
+        new_contests.append(new_contest)
+
+    return SignedSubmittedBallot(
+        object_id,
+        style_id,
+        manifest_hash,
+        code_seed,
+        new_contests,
+        ballot_code,
+        timestamp,
+        contest_hash,
+        None,
+        signature,
+        public_credential,
         state,
     )

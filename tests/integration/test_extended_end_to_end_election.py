@@ -31,9 +31,13 @@ from electionguard.key_ceremony_mediator import KeyCeremonyMediator
 from electionguard.manifest import InternalManifest, Manifest
 
 # Step 5 - Publish and Verify
+from electionguard.musig import aggregate_key_pair, aggregate_public_key
+from electionguard.registrar import EligibilityRoll, Registrar
+from electionguard.schnorr_signature import SchnorrKeyPair
 from electionguard.serialize import construct_path, from_file
 
 # Step 4 - Decrypt Tally
+from electionguard.sign import SignedBallot, sign
 from electionguard.tally import (
     CiphertextTally,
     PlaintextTally,
@@ -84,41 +88,51 @@ class TestEndToEndElection(BaseTestCase):
     """
 
     NUMBER_OF_GUARDIANS = 5
+    NUMBER_OF_REGISTRARS = 2
     QUORUM = 3
 
     REMOVE_RAW_OUTPUT = True
     REMOVE_ZIP_OUTPUT = True
 
-    # Step 0 - Configure Election
+    # Step - Configure Election
     manifest: Manifest
     election_builder: ElectionBuilder
     internal_manifest: InternalManifest
     context: CiphertextElectionContext
     constants: ElectionConstants
+    voters: EligibilityRoll
 
-    # Step 1 - Key Ceremony
+    # Step - Key Ceremony
     mediator: KeyCeremonyMediator
     guardians: List[Guardian] = []
 
-    # Step 2 - Encrypt Votes
+    # Step - Registration
+    registrars: List[Registrar] = []
+
+    # Step - Sign Votes
+    key_pairs: List[SchnorrKeyPair] = []
+    cast_ballots: List[SignedBallot] = []
+    spoil_ballots: List[CiphertextBallot] = []
+
+    # Step - Encrypt Votes
     device: EncryptionDevice
     encrypter: EncryptionMediator
     plaintext_ballots: List[PlaintextBallot]
     ciphertext_ballots: List[CiphertextBallot] = []
 
-    # Step 3 - Cast and Spoil
+    # Step - Cast and Spoil
     ballot_store: DataStore[BallotId, SubmittedBallot]
     ballot_box: BallotBox
     submitted_ballots: Dict[BallotId, SubmittedBallot]
 
-    # Step 4 - Decrypt Tally
+    # Step - Decrypt Tally
     ciphertext_tally: CiphertextTally
     plaintext_tally: PlaintextTally
     plaintext_spoiled_ballots: Dict[str, PlaintextTally]
     decryption_mediator: DecryptionMediator
     lagrange_coefficients: LagrangeCoefficientsRecord
 
-    # Step 5 - Publish
+    # Step - Publish
     guardian_records: List[GuardianRecord] = []
     private_guardian_records: List[PrivateGuardianRecord] = []
 
@@ -126,14 +140,16 @@ class TestEndToEndElection(BaseTestCase):
         """
         Execute the simplified end-to-end test demonstrating each component of the system.
         """
-        self.step_0_configure_election()
-        self.step_1_key_ceremony()
-        self.step_2_encrypt_votes()
-        self.step_3_cast_and_spoil()
-        self.step_4_decrypt_tally()
-        self.step_5_publish()
+        self.step_configure_election()
+        self.step_key_ceremony()
+        self.step_register_voters()
+        self.step_encrypt_votes()
+        self.step_sign_votes()
+        self.step_cast_and_spoil()
+        self.step_decrypt_tally()
+        self.step_publish()
 
-    def step_0_configure_election(self) -> None:
+    def step_configure_election(self) -> None:
         """
         To conduct an election, load an `Manifest` file.
         """
@@ -162,19 +178,19 @@ class TestEndToEndElection(BaseTestCase):
 
         # Create an Election Builder
         self.election_builder = ElectionBuilder(
-            self.NUMBER_OF_GUARDIANS, self.QUORUM, 0, self.manifest
+            self.NUMBER_OF_GUARDIANS, self.QUORUM, self.NUMBER_OF_REGISTRARS, self.manifest
         )
         self._assert_message(
             ElectionBuilder.__qualname__,
-            f"Created with number_of_guardians: {self.NUMBER_OF_GUARDIANS} quorum: {self.QUORUM}",
+            f"Created with number_of_guardians: {self.NUMBER_OF_GUARDIANS} quorum: {self.QUORUM} number_of_registrars: {self.NUMBER_OF_REGISTRARS}",
         )
 
         # Move on to the Key Ceremony
 
-    def step_1_key_ceremony(self) -> None:
+    def step_key_ceremony(self) -> None:
         """
         Using the NUMBER_OF_GUARDIANS, generate public-private keypairs and share
-        representations of those keys with QUORUM of other Guardians.  Then, combine
+        representations of those keys with QUORUM of other Guardians. Then, combine
         the public election keys to make a joint election key that is used to encrypt ballots.
         """
 
@@ -290,7 +306,51 @@ class TestEndToEndElection(BaseTestCase):
 
         # Move on to encrypting ballots
 
-    def step_2_encrypt_votes(self) -> None:
+    def step_register_voters(self) -> None:
+        """
+        Using the NUMBER_OF_REGISTRARS, generate public-private credentials for each voter in the election.
+        """
+
+        #  TODO: Sollte später wieder in encrypt und hier eigene voter die halt gleich alng sind wie die ballots
+        # Load some Ballots
+        self.plaintext_ballots = BallotFactory().get_simple_ballots_from_file()
+        self._assert_message(
+            PlaintextBallot.__qualname__,
+            f"Loaded ballots: {len(self.plaintext_ballots)}",
+            len(self.plaintext_ballots) > 0,
+        )
+
+        self.voters_size = len(self.plaintext_ballots)
+        self.voters = [ballot.object_id for ballot in self.plaintext_ballots]
+
+        # Setup Registrars
+        for i in range(self.NUMBER_OF_REGISTRARS):
+            self.registrars.append(
+                Registrar(
+                    self.voters
+                )
+            )
+
+        for i in range(self.voters_size):
+            credentials: list[SchnorrKeyPair] = []
+
+            for registrar in self.registrars:
+                registrar.generate_credentials_for_voter(i)
+
+                credential = registrar.send_credential_to_voter(i)
+                credentials.append(credential)
+
+                self._assert_message(
+                    Registrar.send_credential_to_voter.__qualname__,
+                    f"Voter {i} received credential from Registrar {registrar}",
+                    credential is not None,
+                )
+
+            key_pair = aggregate_key_pair(credentials)
+            self.key_pairs.append(key_pair)
+
+
+    def step_encrypt_votes(self) -> None:
         """
         Using the `CiphertextElectionContext` encrypt ballots for the election.
         """
@@ -305,14 +365,6 @@ class TestEndToEndElection(BaseTestCase):
             f"Ready to encrypt at location: {self.device.location}",
         )
 
-        # Load some Ballots
-        self.plaintext_ballots = BallotFactory().get_simple_ballots_from_file()
-        self._assert_message(
-            PlaintextBallot.__qualname__,
-            f"Loaded ballots: {len(self.plaintext_ballots)}",
-            len(self.plaintext_ballots) > 0,
-        )
-
         # Encrypt the Ballots
         for plaintext_ballot in self.plaintext_ballots:
             encrypted_ballot = self.encrypter.encrypt(plaintext_ballot)
@@ -323,9 +375,19 @@ class TestEndToEndElection(BaseTestCase):
             )
             self.ciphertext_ballots.append(get_optional(encrypted_ballot))
 
-        # Next, we cast or spoil the ballots
+    def step_sign_votes(self) -> None:
+        for (i, ballot) in enumerate(self.ciphertext_ballots):
+            if randint(0, 1):
+                key_pair = self.key_pairs[i]
+                signed_ballot = sign(ballot, key_pair)
+                assert signed_ballot is not None
 
-    def step_3_cast_and_spoil(self) -> None:
+                self.cast_ballots.append(signed_ballot)
+            else:
+                self.spoil_ballots.append(ballot)
+
+
+    def step_cast_and_spoil(self) -> None:
         """
         Accept each ballot by marking it as either cast or spoiled.
         This example demonstrates one way to accept ballots using the `BallotBox` class.
@@ -337,12 +399,8 @@ class TestEndToEndElection(BaseTestCase):
             self.internal_manifest, self.context, self.ballot_store
         )
 
-        # Randomly cast or spoil the ballots
-        for ballot in self.ciphertext_ballots:
-            if randint(0, 1):
-                submitted_ballot = self.ballot_box.cast(ballot)
-            else:
-                submitted_ballot = self.ballot_box.spoil(ballot)
+        for ballot in self.spoil_ballots:
+            submitted_ballot = self.ballot_box.spoil(ballot)
 
             self._assert_message(
                 BallotBox.__qualname__,
@@ -350,7 +408,16 @@ class TestEndToEndElection(BaseTestCase):
                 submitted_ballot is not None,
             )
 
-    def step_4_decrypt_tally(self) -> None:
+        for ballot in self.cast_ballots:
+            submitted_ballot = self.ballot_box.cast_signed(ballot)
+
+            self._assert_message(
+                BallotBox.__qualname__,
+                f"Submitted Ballot Id: {ballot.object_id} state: {get_optional(submitted_ballot).state}",
+                submitted_ballot is not None,
+            )
+
+    def step_decrypt_tally(self) -> None:
         """
         Homomorphically combine the selections made on all of the cast ballots
         and use the Available Guardians to decrypt the combined tally.
@@ -494,7 +561,7 @@ class TestEndToEndElection(BaseTestCase):
                             expected == decrypted_selection.tally,
                         )
 
-    def step_5_publish(self) -> None:
+    def step_publish(self) -> None:
         """Publish results/artifacts of the election."""
 
         self.guardian_records = [guardian.publish() for guardian in self.guardians]

@@ -1,17 +1,17 @@
 """Factory to create elections for testing purposes."""
 
-from datetime import datetime
 import os
 from dataclasses import dataclass
-from typing import Any, TypeVar, Callable, Optional, Tuple, List
+from datetime import datetime
+from typing import Any, Callable, List, Optional, Tuple, TypeVar
 
 from hypothesis.strategies import (
+    SearchStrategy,
     composite,
     emails,
     integers,
     text,
     uuids,
-    SearchStrategy,
 )
 
 from electionguard.ballot import PlaintextBallot
@@ -25,30 +25,28 @@ from electionguard.key_ceremony import CeremonyDetails
 from electionguard.key_ceremony_mediator import KeyCeremonyMediator
 from electionguard.manifest import (
     BallotStyle,
-    Manifest,
-    ElectionType,
-    InternalManifest,
-    SpecVersion,
-    generate_placeholder_selections_from,
-    GeopoliticalUnit,
     Candidate,
-    Party,
+    CandidateContestDescription,
     ContestDescription,
-    SelectionDescription,
+    ElectionType,
+    GeopoliticalUnit,
+    InternalManifest,
+    Manifest,
+    Party,
+    ReferendumContestDescription,
     ReportingUnitType,
+    SelectionDescription,
+    SpecVersion,
     VoteVariationType,
     contest_description_with_placeholders_from,
-    CandidateContestDescription,
-    ReferendumContestDescription,
+    generate_placeholder_selections_from,
 )
 from electionguard.serialize import from_file
 from electionguard.utils import get_optional
-
+from electionguard_tools.helpers.election_builder import ElectionBuilder
 from electionguard_tools.helpers.key_ceremony_orchestrator import (
     KeyCeremonyOrchestrator,
 )
-from electionguard_tools.helpers.election_builder import ElectionBuilder
-
 
 _T = TypeVar("_T")
 _DrawType = Callable[[SearchStrategy[_T]], _T]

@@ -8,14 +8,13 @@ from electionguard.group import (
     add_q,
     div_p,
     g_pow_p,
-    mult_p,
     mult_q,
     pow_p,
     rand_range_q,
 )
-from electionguard.hash import CryptoHashableAll, hash_elems, hash_elems_agg
+from electionguard.hash import CryptoHashableAll, hash_elems_sig
 from electionguard.logs import log_error
-from electionguard_tools.factories.election_factory import get_optional
+from electionguard.utils import get_optional
 
 SchnorrSecretKey = ElementModQ
 SchnorrPublicKey = ElementModP
@@ -40,33 +39,18 @@ class SchnorrSignature:
         pubkey_pow_challenge = pow_p(public_key, self.challenge)
         recovered_commitment = div_p(g_pow_response, pubkey_pow_challenge)
 
-        computed_challenge = hash_elems(recovered_commitment, message)
+        computed_challenge = hash_elems_sig(recovered_commitment, message)
         return computed_challenge == self.challenge
 
 
-def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, secret_key: SchnorrSecretKey) -> Optional[SchnorrSignature]:
+def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrKeyPair) -> Optional[SchnorrSignature]:
     """Sign a message using the Schnorr signature scheme."""
     commitment = g_pow_p(nonce)
-    challenge = hash_elems(commitment, message)
-    response = add_q(nonce, mult_q(secret_key, challenge))
+    challenge = hash_elems_sig(key_pair.public_key, commitment, message)
+    response = add_q(nonce, mult_q(key_pair.secret_key, challenge))
 
     return SchnorrSignature(challenge, response)
 
-
-def public_key_aggregate(public_keys: list[SchnorrPublicKey]) -> SchnorrPublicKey:
-    """Aggregate Schnorr public keys using the MuSig key aggregation scheme."""
-    if public_keys is None or len(public_keys) == 0:
-        raise ValueError("At least one public key is required for aggregation.")
-
-    sorted_public_keys = sorted(public_keys)
-
-    aggregated_public_key =  sorted_public_keys[0]
-    for public_key in sorted_public_keys[1:]:
-        coefficient = hash_elems_agg(sorted_public_keys, public_key)
-        public_key_pow_coefficient = pow_p(public_key, coefficient)
-        aggregated_public_key = mult_p(aggregated_public_key, public_key_pow_coefficient)
-
-    return aggregated_public_key
 
 def schnorr_keypair_from_secret(a: SchnorrSecretKey) -> Optional[SchnorrKeyPair]:
     """
