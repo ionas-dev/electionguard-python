@@ -2,27 +2,47 @@ from dataclasses import dataclass
 from typing import Optional
 
 from electionguard.eligibility_roll import EligibilityRoll
-from electionguard.group import ElementModQ, add_q, g_pow_p, rand_q
+from electionguard.group import ElementModQ, g_pow_p, rand_q
+from electionguard.nonces import Nonces
 from electionguard.schnorr_signature import SchnorrKeyPair, SchnorrPublicKey
+from electionguard.type import RegistrarId
 
 
 @dataclass
 class Registrar:
+
+    registrar_id: RegistrarId
+    """The unique identifier of the registrar."""
+
+    sequence_order: int
+    """
+    Unique sequence order of the registrars indicating the order
+    in which the key shares per voter should be assembled
+    """
+
     eligibility_roll: EligibilityRoll
     """The eligibility roll containing the list of eligible voters."""
 
     credentials: dict[str, SchnorrKeyPair]
     """A dictionary mapping voter ids to their corresponding Schnorr key pairs (credentials)."""
 
-    nonce: Optional[ElementModQ] = None
+    nonce: ElementModQ
     """
-    An optional nonce used in the generation of credentials.
-    If provided, it will be combined with the voter id to create a unique secret key for each voter.
+    An nonce used in the generation of credentials.
+    It will be combined with the voter id to create a unique secret key for each voter.
     """
 
-    def __init__(self, eligibility_roll: EligibilityRoll, nonce: Optional[ElementModQ] = None) -> None:
+    def __init__(
+        self,
+        registrar_id: RegistrarId,
+        sequence_order: int,
+        eligibility_roll: EligibilityRoll,
+        nonce: Optional[ElementModQ] = None,
+    ) -> None:
+        self.registrar_id = registrar_id
+        self.sequence_order = sequence_order
         self.eligibility_roll = eligibility_roll
-        self.nonce = nonce
+        self.nonce = nonce if nonce is not None else rand_q()
         self.credentials = {}
 
     def publish_public_crendentials(self) -> list[SchnorrPublicKey]:
@@ -38,17 +58,15 @@ class Registrar:
 
         return self.credentials[id]
 
-    def generate_credentials(self):
+    def generate_credentials(self) -> None:
         """Generates a Schnorr key pair for each voter in the eligibility roll."""
 
-        nonce = self.nonce if self.nonce is not None else rand_q()
+        nonces = Nonces(self.nonce, f"registrar-{self.registrar_id}-credentials")
 
         for (i, voter) in enumerate(self.eligibility_roll.voters):
-            nonce = add_q(nonce, i)
+            nonce = nonces.get_with_headers(i, voter.object_id)
             credential = self._generate_credential(nonce)
-
-            voter_id = voter.object_id
-            self.credentials[voter_id] = credential
+            self.credentials[voter.object_id] = credential
 
     def _generate_credential(self, nonce: Optional[ElementModQ] = None) -> SchnorrKeyPair:
         """Generates one Schnorr key pair"""
