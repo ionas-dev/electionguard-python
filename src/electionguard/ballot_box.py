@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, Optional
 
+from electionguard.credential_registry import CredentialRegistry
 from electionguard.sign import SignedBallot
 
 from .ballot import (
@@ -27,9 +28,17 @@ class BallotBox:
     _encryption: CiphertextElectionContext = field()
     _store: DataStore = field(default_factory=lambda: DataStore())
     _signed_store: DataStore = field(default_factory=lambda: DataStore())
+    _credential_registry: Optional[CredentialRegistry] = None
 
     def cast(self, ballot: CiphertextBallot) -> Optional[SubmittedBallot]:
-        """Cast a specific encrypted `CiphertextBallot`."""
+        """Cast a specific encrypted `CiphertextBallot`. Refused if this
+        election has a credential registry configured — such an election
+        requires ballots to be signed and cast via `cast_signed` instead."""
+        if self._credential_registry is not None:
+            log_warning(
+                f"ballot: {ballot.object_id} rejected, this election requires signed ballots"
+            )
+            return None
         return submit_ballot_to_box(
             ballot,
             BallotBoxState.CAST,
@@ -39,7 +48,8 @@ class BallotBox:
         )
 
     def cast_signed(self, ballot: SignedBallot) -> Optional[SignedSubmittedBallot]:
-        """Cast a specific encrypted `CiphertextBallot`."""
+        """Cast a specific encrypted `CiphertextBallot`, requiring its credential
+        to be registered and its signature to verify."""
         return submit_signed_ballot_to_box(
             ballot,
             BallotBoxState.CAST,
@@ -47,6 +57,7 @@ class BallotBox:
             self._encryption,
             self._store,
             self._signed_store,
+            self._credential_registry,
         )
 
     def spoil(self, ballot: CiphertextBallot) -> Optional[SubmittedBallot]:
@@ -67,15 +78,31 @@ def submit_signed_ballot_to_box(
     context: CiphertextElectionContext,
     store: DataStore,
     signature_store: DataStore,
+    credential_registry: Optional[CredentialRegistry],
 ) -> Optional[SignedSubmittedBallot]:
     """
     Submit a ballot within the context of a specified election and against an existing data store
-    Verified that the ballot is valid for the election `internal_manifest` and `context` and
-    that the ballot has not already been cast or spoiled.
+    Verified that the ballot is valid for the election `internal_manifest` and `context`,
+    that its credential is registered in `credential_registry` for the ballot's style,
+    that its signature verifies, and that the ballot has not already been cast or spoiled.
     :return: a `SubmittedBallot` or `None` if there was an error
     """
     if not ballot_is_valid_for_election(ballot, internal_manifest, context, True):
         log_warning(f"ballot: {ballot.object_id} failed validity check")
+        return None
+
+    if credential_registry is None:
+        log_warning(
+            f"ballot: {ballot.object_id} rejected, no credential registry configured"
+        )
+        return None
+
+    if not credential_registry.is_registered(ballot.style_id, ballot.public_credential):
+        log_warning(f"ballot: {ballot.object_id} credential is not registered")
+        return None
+
+    if not ballot.verify_signature():
+        log_warning(f"ballot: {ballot.object_id} failed signature verification")
         return None
 
     existing_ballot = store.get(ballot.object_id)
