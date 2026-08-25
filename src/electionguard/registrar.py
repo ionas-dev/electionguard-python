@@ -1,11 +1,12 @@
 from dataclasses import dataclass
 from typing import Optional
 
+from electionguard.credential_registry import CredentialRegistry
 from electionguard.eligibility_roll import EligibilityRoll
 from electionguard.group import ElementModQ, g_pow_p, rand_q
 from electionguard.nonces import Nonces
 from electionguard.schnorr_signature import SchnorrKeyPair, SchnorrPublicKey
-from electionguard.type import RegistrarId
+from electionguard.type import BallotStyleId, RegistrarId
 
 
 @dataclass
@@ -49,6 +50,45 @@ class Registrar:
         """Publishes the public credentials for each voter in the eligibility roll."""
 
         return [self.credentials[voter.object_id].public_key for voter in self.eligibility_roll.voters]
+
+    def publish_public_credentials_for_style(self, ballot_style_id: BallotStyleId) -> list[SchnorrPublicKey]:
+        """
+        Publishes this registrar's public credential shares for every voter
+        eligible for `ballot_style_id`, in eligibility roll order. Used to
+        register credentials with a CredentialRegistry, which keeps entries
+        partitioned per ballot style.
+        """
+        return [
+            self.credentials[voter.object_id].public_key
+            for voter in self.eligibility_roll.voters
+            if voter.ballot_style_id == ballot_style_id
+        ]
+
+    def verify_registration(self, registry: CredentialRegistry) -> bool:
+        """
+        Verify that every one of this registrar's own shares was correctly
+        and completely published in `registry`, for every ballot style this
+        registrar's voters belong to.
+        """
+        ballot_style_ids = {voter.ballot_style_id for voter in self.eligibility_roll.voters}
+
+        for ballot_style_id in ballot_style_ids:
+            own_shares = self.publish_public_credentials_for_style(ballot_style_id)
+            try:
+                entries = registry.entries(ballot_style_id)
+            except ValueError:
+                return False
+
+            if len(own_shares) != len(entries):
+                return False
+
+            if any(
+                entry.shares[self.sequence_order] != own_share
+                for entry, own_share in zip(entries, own_shares)
+            ):
+                return False
+
+        return True
 
     def send_credential_to_voter(self, id: str) -> SchnorrKeyPair:
         """""Sends the credential to a voter based on their ID."""
