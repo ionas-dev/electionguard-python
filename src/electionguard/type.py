@@ -5,3 +5,4 @@ MediatorId = str
 VerifierId = str
 SelectionId = str
 RegistrarId = str
+BallotStyleId = str

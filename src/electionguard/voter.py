@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from electionguard.manifest import ContactInformation
+from electionguard.type import BallotStyleId
 
 
 @dataclass(unsafe_hash=True)
@@ -16,5 +17,5 @@ class Voter:
     contact_information: ContactInformation
     """Contact details of the voter. At least one of address_line, email, or phone should be provided."""
 
-    ballot_style_id: str
+    ballot_style_id: BallotStyleId
     """Reference to the ballot style that determines which contests this voter is eligible to vote in."""
