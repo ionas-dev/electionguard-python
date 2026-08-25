@@ -1,42 +1,47 @@
 # pylint: disable=protected-access
+from dataclasses import replace
 from datetime import timedelta
 from typing import Dict
-from hypothesis import given, HealthCheck, settings, Phase
+
+from hypothesis import HealthCheck, Phase, given, settings
 from hypothesis.strategies import integers
-
-from tests.base_test_case import BaseTestCase
-
-from electionguard.ballot_box import spoil_ballot
-from electionguard.data_store import DataStore
-from electionguard.decryption import compute_decryption_share
-from electionguard.decryption_share import DecryptionShare
-from electionguard.decrypt_with_shares import decrypt_tally
-from electionguard.elgamal import ElGamalKeyPair
-from electionguard.encrypt import EncryptionMediator, encrypt_ballot
-from electionguard.key_ceremony import CeremonyDetails
-from electionguard.key_ceremony_mediator import KeyCeremonyMediator
-from electionguard.tally import tally_ballots
-from electionguard.type import GuardianId
-from electionguard.utils import get_optional
-
-from electionguard_verify.verify import (
-    verify_ballot,
-    verify_decryption,
-    verify_aggregation,
-)
 
 import electionguard_tools.factories.ballot_factory as BallotFactory
 import electionguard_tools.factories.election_factory as ElectionFactory
-from electionguard_tools.strategies.election import (
-    elections_and_ballots,
-    ElectionsAndBallotsTupleType,
-)
-from electionguard_tools.strategies.elgamal import elgamal_keypairs
+from electionguard.ballot_box import spoil_ballot
+from electionguard.credential_registry import CredentialEntry, CredentialRegistry
+from electionguard.data_store import DataStore
+from electionguard.decrypt_with_shares import decrypt_tally
+from electionguard.decryption import compute_decryption_share
+from electionguard.decryption_share import DecryptionShare
+from electionguard.elgamal import ElGamalKeyPair, elgamal_keypair_from_secret
+from electionguard.encrypt import EncryptionMediator, encrypt_ballot
+from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q
+from electionguard.key_ceremony import CeremonyDetails
+from electionguard.key_ceremony_mediator import KeyCeremonyMediator
+from electionguard.musig import aggregate_key_pair
+from electionguard.schnorr_signature import schnorr_keypair_random
+from electionguard.sign import sign
+from electionguard.tally import tally_ballots
+from electionguard.type import GuardianId
+from electionguard.utils import get_optional
+from electionguard_tools.helpers.election_builder import ElectionBuilder
 from electionguard_tools.helpers.key_ceremony_orchestrator import (
     KeyCeremonyOrchestrator,
 )
-from electionguard_tools.helpers.election_builder import ElectionBuilder
-
+from electionguard_tools.strategies.election import (
+    ElectionsAndBallotsTupleType,
+    elections_and_ballots,
+)
+from electionguard_tools.strategies.elgamal import elgamal_keypairs
+from electionguard_verify.verify import (
+    verify_aggregation,
+    verify_ballot,
+    verify_ballot_eligibility,
+    verify_decryption,
+    verify_key_aggregation,
+)
+from tests.base_test_case import BaseTestCase
 
 election_factory = ElectionFactory.ElectionFactory()
 ballot_factory = BallotFactory.BallotFactory()
@@ -73,6 +78,80 @@ class TestVerify(BaseTestCase):
         # Assert
         self.assertIsNotNone(verification)
         self.assertTrue(verification.verified)
+
+    def _make_signed_ballot(self):
+        keypair = get_optional(elgamal_keypair_from_secret(TWO_MOD_Q))
+        manifest = election_factory.get_simple_manifest_from_file()
+        internal_manifest, context = election_factory.get_fake_ciphertext_election(
+            manifest, keypair.public_key
+        )
+        data = ballot_factory.get_simple_ballot_from_file()
+        seed = election_factory.get_encryption_device().get_hash()
+        encrypted_ballot = get_optional(
+            encrypt_ballot(data, internal_manifest, context, seed)
+        )
+        share = schnorr_keypair_random()
+        credential = aggregate_key_pair([share])
+        return sign(encrypted_ballot, credential), share
+
+    @staticmethod
+    def _registered_registry(style_id: str, *public_keys) -> CredentialRegistry:
+        registry = CredentialRegistry(
+            number_of_registrars=1, number_of_eligible_voters={style_id: len(public_keys)}
+        )
+        registry.register_credentials(style_id, list(public_keys), 0)
+        return registry
+
+    def test_verify_ballot_eligibility_true_for_registered_valid_ballot(self) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        registry = self._registered_registry(signed_ballot.style_id, share.public_key)
+
+        verification = verify_ballot_eligibility(signed_ballot, registry)
+
+        self.assertTrue(verification.verified)
+
+    def test_verify_ballot_eligibility_false_when_credential_not_registered(
+        self,
+    ) -> None:
+        signed_ballot, _share = self._make_signed_ballot()
+        other_share = schnorr_keypair_random()
+        registry = self._registered_registry(signed_ballot.style_id, other_share.public_key)
+
+        verification = verify_ballot_eligibility(signed_ballot, registry)
+
+        self.assertFalse(verification.verified)
+
+    def test_verify_ballot_eligibility_false_when_signature_invalid(self) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        registry = self._registered_registry(signed_ballot.style_id, share.public_key)
+        tampered_signature = replace(
+            signed_ballot.signature,
+            response=add_q(signed_ballot.signature.response, ONE_MOD_Q),
+        )
+        tampered_ballot = replace(signed_ballot, signature=tampered_signature)
+
+        verification = verify_ballot_eligibility(tampered_ballot, registry)
+
+        self.assertFalse(verification.verified)
+
+    def test_verify_key_aggregation_true_for_correctly_aggregated_entries(self) -> None:
+        registry = self._registered_registry(
+            "some-style", schnorr_keypair_random().public_key, schnorr_keypair_random().public_key
+        )
+        entries = registry.entries("some-style")
+
+        verification = verify_key_aggregation(entries)
+
+        self.assertTrue(verification.verified)
+
+    def test_verify_key_aggregation_false_for_a_tampered_entry(self) -> None:
+        real_share = schnorr_keypair_random().public_key
+        wrong_aggregate = schnorr_keypair_random().public_key
+        tampered_entry = CredentialEntry(shares=[real_share], aggregated_public_key=wrong_aggregate)
+
+        verification = verify_key_aggregation([tampered_entry])
+
+        self.assertFalse(verification.verified)
 
     def test_verify_decryption(self):
         # Arrange

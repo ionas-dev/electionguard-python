@@ -2,12 +2,13 @@ import importlib.metadata
 
 # <AUTOGEN_INIT>
 from electionguard_verify import verify
-
 from electionguard_verify.verify import (
     Verification,
     verify_aggregation,
     verify_ballot,
+    verify_ballot_eligibility,
     verify_decryption,
+    verify_key_aggregation,
 )
 
 __all__ = [
@@ -15,7 +16,9 @@ __all__ = [
     "verify",
     "verify_aggregation",
     "verify_ballot",
+    "verify_ballot_eligibility",
     "verify_decryption",
+    "verify_key_aggregation",
 ]
 
 # </AUTOGEN_INIT>
