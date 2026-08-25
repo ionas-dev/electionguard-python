@@ -19,6 +19,9 @@ from electionguard.ballot_box import BallotBox, get_ballots
 # Step 0 - Configure Election
 from electionguard.constants import ElectionConstants, get_constants
 
+# Step 5 - Publish and Verify
+from electionguard.credential_registry import CredentialRegistry
+
 # Step 3 - Cast and Spoil
 from electionguard.data_store import DataStore
 from electionguard.decryption_mediator import DecryptionMediator
@@ -30,9 +33,7 @@ from electionguard.encrypt import EncryptionDevice, EncryptionMediator
 from electionguard.guardian import Guardian, GuardianRecord, PrivateGuardianRecord
 from electionguard.key_ceremony_mediator import KeyCeremonyMediator
 from electionguard.manifest import InternalManifest, Manifest
-
-# Step 5 - Publish and Verify
-from electionguard.musig import aggregate_key_pair, aggregate_public_key
+from electionguard.musig import aggregate_key_pair
 from electionguard.registrar import EligibilityRoll, Registrar
 from electionguard.schnorr_signature import SchnorrKeyPair
 from electionguard.serialize import construct_path, from_file
@@ -45,13 +46,15 @@ from electionguard.tally import (
     PublishedCiphertextTally,
     tally_ballots,
 )
-from electionguard.type import BallotId
+from electionguard.type import BallotId, VoterId
 from electionguard.utils import get_optional
+from electionguard.voter import Voter
 from electionguard_tools.factories.ballot_factory import BallotFactory
 from electionguard_tools.factories.election_factory import (
     NUMBER_OF_GUARDIANS,
     ElectionFactory,
 )
+from electionguard_tools.factories.voter_factory import VoterFactory
 from electionguard_tools.helpers.election_builder import ElectionBuilder
 from electionguard_tools.helpers.export import (
     COEFFICIENTS_FILE_NAME,
@@ -82,12 +85,6 @@ spoiled_ballots_directory = path.join(ELECTION_RECORD_DIR, SPOILED_BALLOTS_DIR)
 
 
 # pylint: disable=too-many-instance-attributes
-@unittest.skip(
-    "WIP scaffold for the registrar/ballot-signing extension: step_register_voters() "
-    "predates the current Registrar API (passes a bare list of ballot ids instead of an "
-    "EligibilityRoll, and no registrar_id/sequence_order). Kept as a reference for building "
-    "a proper extended end-to-end test once multi-registrar credential assembly is implemented."
-)
 class TestEndToEndElection(BaseTestCase):
     """
     Test a complete simple example of executing an End-to-End encrypted election.
@@ -115,17 +112,17 @@ class TestEndToEndElection(BaseTestCase):
 
     # Step - Registration
     registrars: List[Registrar] = []
+    credential_registry: CredentialRegistry
 
     # Step - Sign Votes
-    key_pairs: List[SchnorrKeyPair] = []
-    cast_ballots: List[SignedBallot] = []
-    spoil_ballots: List[CiphertextBallot] = []
+    key_pairs: Dict[VoterId, SchnorrKeyPair] = {}
 
     # Step - Encrypt Votes
     device: EncryptionDevice
     encrypter: EncryptionMediator
     plaintext_ballots: List[PlaintextBallot]
     ciphertext_ballots: List[CiphertextBallot] = []
+    signed_ballots: List[SignedBallot] = []
 
     # Step - Cast and Spoil
     ballot_store: DataStore[BallotId, SubmittedBallot]
@@ -318,11 +315,15 @@ class TestEndToEndElection(BaseTestCase):
 
     def step_register_voters(self) -> None:
         """
-        Using the NUMBER_OF_REGISTRARS, generate public-private credentials for each voter in the election.
+        Load a fixed set of voters and their corresponding ballots from fixture
+        files, matched 1:1 by object_id with each voter's ballot_style_id
+        matching its ballot's style_id. Then use NUMBER_OF_REGISTRARS
+        registrars to generate one credential share per voter, publish those
+        shares to a CredentialRegistry (kept partitioned per ballot style),
+        and have each voter locally aggregate its own shares (via MuSig) into
+        the signing credential it will use in step_sign_votes.
         """
 
-        #  TODO: Sollte später wieder in encrypt und hier eigene voter die halt gleich alng sind wie die ballots
-        # Load some Ballots
         self.plaintext_ballots = BallotFactory().get_simple_ballots_from_file()
         self._assert_message(
             PlaintextBallot.__qualname__,
@@ -330,34 +331,54 @@ class TestEndToEndElection(BaseTestCase):
             len(self.plaintext_ballots) > 0,
         )
 
-        self.voters_size = len(self.plaintext_ballots)
-        self.voters = [ballot.object_id for ballot in self.plaintext_ballots]
+        voters = VoterFactory().get_simple_voters_from_file()
+        self._assert_message(
+            Voter.__qualname__,
+            f"Loaded voters: {len(voters)}",
+            len(voters) == len(self.plaintext_ballots),
+        )
+        self.voters = EligibilityRoll(object_id="voters", voters=voters)
 
-        # Setup Registrars
-        for i in range(self.NUMBER_OF_REGISTRARS):
-            self.registrars.append(
-                Registrar(
-                    self.voters
-                )
+        voters_per_style: Dict[str, int] = {}
+        for voter in voters:
+            voters_per_style[voter.ballot_style_id] = (
+                voters_per_style.get(voter.ballot_style_id, 0) + 1
             )
 
-        for i in range(self.voters_size):
-            credentials: list[SchnorrKeyPair] = []
+        # Setup Registrars: each generates its own credential share for every voter.
+        for i in range(self.NUMBER_OF_REGISTRARS):
+            registrar = Registrar(f"registrar-{i}", i, self.voters)
+            registrar.generate_credentials()
+            self.registrars.append(registrar)
 
-            for registrar in self.registrars:
-                registrar.generate_credentials_for_voter(i)
-
-                credential = registrar.send_credential_to_voter(i)
-                credentials.append(credential)
-
-                self._assert_message(
-                    Registrar.send_credential_to_voter.__qualname__,
-                    f"Voter {i} received credential from Registrar {registrar}",
-                    credential is not None,
+        # Publish every registrar's shares to a public CredentialRegistry, per ballot style.
+        self.credential_registry = CredentialRegistry(
+            number_of_registrars=self.NUMBER_OF_REGISTRARS,
+            number_of_eligible_voters=voters_per_style,
+        )
+        for registrar in self.registrars:
+            for ballot_style_id in voters_per_style:
+                self.credential_registry.register_credentials(
+                    ballot_style_id,
+                    registrar.publish_public_credentials_for_style(ballot_style_id),
+                    registrar.sequence_order,
                 )
 
-            key_pair = aggregate_key_pair(credentials)
-            self.key_pairs.append(key_pair)
+        for registrar in self.registrars:
+            self._assert_message(
+                Registrar.verify_registration.__qualname__,
+                f"Registrar {registrar.registrar_id} verified its own shares are correctly registered",
+                registrar.verify_registration(self.credential_registry),
+            )
+
+        # Each voter aggregates its own shares (in registrar sequence_order) into its credential.
+        ordered_registrars = sorted(self.registrars, key=lambda registrar: registrar.sequence_order)
+        for voter in self.voters.voters:
+            shares = [
+                registrar.send_credential_to_voter(voter.object_id)
+                for registrar in ordered_registrars
+            ]
+            self.key_pairs[voter.object_id] = aggregate_key_pair(shares)
 
 
     def step_encrypt_votes(self) -> None:
@@ -386,15 +407,11 @@ class TestEndToEndElection(BaseTestCase):
             self.ciphertext_ballots.append(get_optional(encrypted_ballot))
 
     def step_sign_votes(self) -> None:
-        for (i, ballot) in enumerate(self.ciphertext_ballots):
-            if randint(0, 1):
-                key_pair = self.key_pairs[i]
-                signed_ballot = sign(ballot, key_pair)
-                assert signed_ballot is not None
-
-                self.cast_ballots.append(signed_ballot)
-            else:
-                self.spoil_ballots.append(ballot)
+        for ballot in self.ciphertext_ballots:
+            key_pair = self.key_pairs[ballot.object_id]
+            signed_ballot = sign(ballot, key_pair)
+            assert signed_ballot is not None
+            self.signed_ballots.append(signed_ballot)
 
 
     def step_cast_and_spoil(self) -> None:
@@ -406,20 +423,17 @@ class TestEndToEndElection(BaseTestCase):
         # Configure the Ballot Box
         self.ballot_store = DataStore()
         self.ballot_box = BallotBox(
-            self.internal_manifest, self.context, self.ballot_store
+            self.internal_manifest,
+            self.context,
+            self.ballot_store,
+            _credential_registry=self.credential_registry,
         )
 
-        for ballot in self.spoil_ballots:
-            submitted_ballot = self.ballot_box.spoil(ballot)
-
-            self._assert_message(
-                BallotBox.__qualname__,
-                f"Submitted Ballot Id: {ballot.object_id} state: {get_optional(submitted_ballot).state}",
-                submitted_ballot is not None,
-            )
-
-        for ballot in self.cast_ballots:
-            submitted_ballot = self.ballot_box.cast_signed(ballot)
+        for ballot in self.signed_ballots:
+            if randint(0, 1):
+                submitted_ballot = self.ballot_box.spoil(ballot)
+            else:
+                submitted_ballot = self.ballot_box.cast_signed(ballot)
 
             self._assert_message(
                 BallotBox.__qualname__,

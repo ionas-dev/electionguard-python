@@ -6,3 +6,4 @@ VerifierId = str
 SelectionId = str
 RegistrarId = str
 BallotStyleId = str
+VoterId = str

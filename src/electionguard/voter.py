@@ -1,14 +1,14 @@
 from dataclasses import dataclass
 
 from electionguard.manifest import ContactInformation
-from electionguard.type import BallotStyleId
+from electionguard.type import BallotStyleId, VoterId
 
 
 @dataclass(unsafe_hash=True)
 class Voter:
     """A single entry in the eligibility roll, corresponding to one eligible voter."""
 
-    object_id: str
+    object_id: VoterId
     """Unique identifier of the eligibility roll entry."""
 
     name: str

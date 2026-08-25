@@ -1,0 +1,38 @@
+[
+  {
+    "object_id": "1048ce32-f1b1-4b05-b7fb-8c615ac842ee",
+    "name": "Voter 1",
+    "contact_information": {},
+    "ballot_style_id": "jefferson-county-ballot-style"
+  },
+  {
+    "object_id": "03a29d15-667c-4ac8-afd7-549f19b8e4eb",
+    "name": "Voter 2",
+    "contact_information": {},
+    "ballot_style_id": "jefferson-county-ballot-style"
+  },
+  {
+    "object_id": "25a7111b-4334-425a-87c1-f7a49f42b3a2",
+    "name": "Voter 3",
+    "contact_information": {},
+    "ballot_style_id": "jefferson-county-ballot-style"
+  },
+  {
+    "object_id": "69aeacb4-64c6-4205-9bb2-5fb6b3b3ea58",
+    "name": "Voter 4",
+    "contact_information": {},
+    "ballot_style_id": "harrison-township-ballot-style"
+  },
+  {
+    "object_id": "5a150c74-a2cb-47f6-b575-165ba8a4ce53",
+    "name": "Voter 5",
+    "contact_information": {},
+    "ballot_style_id": "harrison-township-ballot-style"
+  },
+  {
+    "object_id": "9fee0e77-cfd2-401a-a210-93bbc4dd30ef",
+    "name": "Voter 6",
+    "contact_information": {},
+    "ballot_style_id": "harrison-township-ballot-style"
+  }
+]
