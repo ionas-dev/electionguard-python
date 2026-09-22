@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 from electionguard.ballot import CiphertextBallot, SubmittedBallot
-from electionguard.credential_registry import CredentialEntry, CredentialRegistry
+from electionguard.credential_registry import Credential, CredentialRegistry
 from electionguard.election import CiphertextElectionContext
 from electionguard.key_ceremony import ElectionPublicKey
 from electionguard.manifest import (
@@ -120,10 +120,10 @@ def verify_aggregation(
 
 
 def verify_key_aggregation(
-    entries: List[CredentialEntry],
+    entries: List[Credential],
 ) -> Verification:
     """
-    Method to independently verify that every published CredentialEntry's
+    Method to independently verify that every published Credential's
     aggregated_public_key is actually the MuSig aggregation of its own
     shares. Guards against a registry publisher claiming a wrong aggregated
     credential for some entry.
