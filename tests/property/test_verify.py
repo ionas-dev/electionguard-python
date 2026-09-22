@@ -9,7 +9,7 @@ from hypothesis.strategies import integers
 import electionguard_tools.factories.ballot_factory as BallotFactory
 import electionguard_tools.factories.election_factory as ElectionFactory
 from electionguard.ballot_box import spoil_ballot
-from electionguard.credential_registry import CredentialEntry, CredentialRegistry
+from electionguard.credential_registry import Credential, CredentialRegistry, make_credential_registry
 from electionguard.data_store import DataStore
 from electionguard.decrypt_with_shares import decrypt_tally
 from electionguard.decryption import compute_decryption_share
@@ -96,11 +96,11 @@ class TestVerify(BaseTestCase):
 
     @staticmethod
     def _registered_registry(style_id: str, *public_keys) -> CredentialRegistry:
-        registry = CredentialRegistry(
-            number_of_registrars=1, number_of_eligible_voters={style_id: len(public_keys)}
+        return make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={style_id: len(public_keys)},
+            shares_by_style={style_id: [list(public_keys)]},
         )
-        registry.register_credentials(style_id, list(public_keys), 0)
-        return registry
 
     def test_verify_ballot_eligibility_true_for_registered_valid_ballot(self) -> None:
         signed_ballot, share = self._make_signed_ballot()
@@ -147,7 +147,7 @@ class TestVerify(BaseTestCase):
     def test_verify_key_aggregation_false_for_a_tampered_entry(self) -> None:
         real_share = schnorr_keypair_random().public_key
         wrong_aggregate = schnorr_keypair_random().public_key
-        tampered_entry = CredentialEntry(shares=[real_share], aggregated_public_key=wrong_aggregate)
+        tampered_entry = Credential(shares=[real_share], aggregated_public_key=wrong_aggregate)
 
         verification = verify_key_aggregation([tampered_entry])
 

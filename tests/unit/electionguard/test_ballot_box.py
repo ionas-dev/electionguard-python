@@ -9,7 +9,7 @@ from electionguard.ballot_box import (
     submit_ballot,
     submit_ballot_to_box,
 )
-from electionguard.credential_registry import CredentialRegistry
+from electionguard.credential_registry import CredentialRegistry, make_credential_registry
 from electionguard.data_store import DataStore
 from electionguard.elgamal import elgamal_keypair_from_secret
 from electionguard.encrypt import encrypt_ballot
@@ -233,11 +233,11 @@ class TestBallotBox(BaseTestCase):
         return sign(encrypted_ballot, credential), share
 
     def _registered_registry(self, style_id: str, *public_keys) -> CredentialRegistry:
-        registry = CredentialRegistry(
-            number_of_registrars=1, number_of_eligible_voters={style_id: len(public_keys)}
+        return make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={style_id: len(public_keys)},
+            shares_by_style={style_id: [list(public_keys)]},
         )
-        registry.register_credentials(style_id, list(public_keys), 0)
-        return registry
 
     def test_ballot_box_cast_signed_ballot_with_registered_credential(self) -> None:
         signed_ballot, key_pair = self._make_signed_ballot()
@@ -325,7 +325,9 @@ class TestBallotBox(BaseTestCase):
                 self.seed,
             )
         )
-        registry = CredentialRegistry(number_of_registrars=1, number_of_eligible_voters={})
+        registry = make_credential_registry(
+            number_of_registrars=1, number_of_eligible_voters={}, shares_by_style={}
+        )
         store: DataStore = DataStore()
         ballot_box = BallotBox(
             self.internal_manifest, self.context, store, _credential_registry=registry

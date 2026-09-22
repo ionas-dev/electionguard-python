@@ -12,6 +12,7 @@ from electionguard.ballot import (
     BallotBoxState,
     CiphertextBallot,
     PlaintextBallot,
+    SignedSubmittedBallot,
     SubmittedBallot,
 )
 from electionguard.ballot_box import BallotBox, get_ballots
@@ -20,7 +21,10 @@ from electionguard.ballot_box import BallotBox, get_ballots
 from electionguard.constants import ElectionConstants, get_constants
 
 # Step 5 - Publish and Verify
-from electionguard.credential_registry import CredentialRegistry
+from electionguard.credential_registry import (
+    CredentialRegistry,
+    make_credential_registry,
+)
 
 # Step 3 - Cast and Spoil
 from electionguard.data_store import DataStore
@@ -34,7 +38,8 @@ from electionguard.guardian import Guardian, GuardianRecord, PrivateGuardianReco
 from electionguard.key_ceremony_mediator import KeyCeremonyMediator
 from electionguard.manifest import InternalManifest, Manifest
 from electionguard.musig import aggregate_key_pair
-from electionguard.registrar import EligibilityRoll, Registrar
+from electionguard.pedersen import pedersen_commit
+from electionguard.registrar import ElectoralRoll, Registrar
 from electionguard.schnorr_signature import SchnorrKeyPair
 from electionguard.serialize import construct_path, from_file
 
@@ -104,7 +109,7 @@ class TestEndToEndElection(BaseTestCase):
     internal_manifest: InternalManifest
     context: CiphertextElectionContext
     constants: ElectionConstants
-    voters: EligibilityRoll
+    electoral_roll: ElectoralRoll
 
     # Step - Key Ceremony
     mediator: KeyCeremonyMediator
@@ -337,7 +342,8 @@ class TestEndToEndElection(BaseTestCase):
             f"Loaded voters: {len(voters)}",
             len(voters) == len(self.plaintext_ballots),
         )
-        self.voters = EligibilityRoll(object_id="voters", voters=voters)
+        self.electoral_roll = ElectoralRoll(object_id="voters", voters=voters)
+        (commitment, opening) = pedersen_commit(*self.electoral_roll.voters)
 
         voters_per_style: Dict[str, int] = {}
         for voter in voters:
@@ -347,22 +353,30 @@ class TestEndToEndElection(BaseTestCase):
 
         # Setup Registrars: each generates its own credential share for every voter.
         for i in range(self.NUMBER_OF_REGISTRARS):
-            registrar = Registrar(f"registrar-{i}", i, self.voters)
+            registrar = Registrar(f"registrar-{i}", i, self.electoral_roll)
+            self.assertTrue(registrar.verify_electoral_roll_pedesen_commitment(commitment, opening))
             registrar.generate_credentials()
             self.registrars.append(registrar)
 
         # Publish every registrar's shares to a public CredentialRegistry, per ballot style.
-        self.credential_registry = CredentialRegistry(
+        ordered_registrars = sorted(self.registrars, key=lambda registrar: registrar.sequence_order)
+        shares_by_style = {
+            ballot_style_id: [
+                registrar.publish_public_credentials_for_style(ballot_style_id)
+                for registrar in ordered_registrars
+            ]
+            for ballot_style_id in voters_per_style
+        }
+        self.credential_registry = make_credential_registry(
             number_of_registrars=self.NUMBER_OF_REGISTRARS,
             number_of_eligible_voters=voters_per_style,
+            shares_by_style=shares_by_style,
         )
-        for registrar in self.registrars:
-            for ballot_style_id in voters_per_style:
-                self.credential_registry.register_credentials(
-                    ballot_style_id,
-                    registrar.publish_public_credentials_for_style(ballot_style_id),
-                    registrar.sequence_order,
-                )
+        self._assert_message(
+            CredentialRegistry.verify.__qualname__,
+            "CredentialRegistry passes ValidateRegistration",
+            self.credential_registry.verify(),
+        )
 
         for registrar in self.registrars:
             self._assert_message(
@@ -372,8 +386,7 @@ class TestEndToEndElection(BaseTestCase):
             )
 
         # Each voter aggregates its own shares (in registrar sequence_order) into its credential.
-        ordered_registrars = sorted(self.registrars, key=lambda registrar: registrar.sequence_order)
-        for voter in self.voters.voters:
+        for voter in self.electoral_roll.voters:
             shares = [
                 registrar.send_credential_to_voter(voter.object_id)
                 for registrar in ordered_registrars
@@ -672,8 +685,13 @@ class TestEndToEndElection(BaseTestCase):
         self.assertEqualAsDicts(self.device, device_from_file)
 
         for ballot in self.ballot_store.all():
+            ballot_type = (
+                SignedSubmittedBallot
+                if isinstance(ballot, SignedSubmittedBallot)
+                else SubmittedBallot
+            )
             ballot_from_file = from_file(
-                SubmittedBallot,
+                ballot_type,
                 construct_path(
                     SUBMITTED_BALLOT_PREFIX + ballot.object_id,
                     submitted_ballots_directory,

@@ -1,7 +1,7 @@
 from typing import Optional
 
-from electionguard.credential_registry import CredentialRegistry
-from electionguard.eligibility_roll import EligibilityRoll
+from electionguard.credential_registry import make_credential_registry
+from electionguard.electoral_roll import ElectoralRoll
 from electionguard.group import ElementModQ, g_pow_p, rand_q
 from electionguard.manifest import ContactInformation
 from electionguard.registrar import Registrar
@@ -22,14 +22,14 @@ def _voter(voter_id: str, ballot_style_id: str = STYLE_1) -> Voter:
     )
 
 
-def _roll(*voters: Voter) -> EligibilityRoll:
-    return EligibilityRoll(object_id="roll-1", voters=list(voters))
+def _roll(*voters: Voter) -> ElectoralRoll:
+    return ElectoralRoll(object_id="roll-1", voters=list(voters))
 
 
 def _registrar(
-    registrar_id: str, sequence_order: int, roll: EligibilityRoll, nonce: Optional[ElementModQ] = None
+    registrar_id: str, sequence_order: int, roll: ElectoralRoll, nonce: Optional[ElementModQ] = None
 ) -> Registrar:
-    return Registrar(registrar_id, sequence_order, roll, nonce=nonce)
+    return Registrar(registrar_id, sequence_order, roll, seed=nonce)
 
 
 class TestRegistrar(BaseTestCase):
@@ -81,7 +81,7 @@ class TestRegistrar(BaseTestCase):
         registrar = _registrar("registrar-1", 0, roll)
         registrar.generate_credentials()
 
-        published = registrar.publish_public_crendentials()
+        published = registrar.publish_public_credentials()
 
         self.assertEqual(
             published,
@@ -131,20 +131,30 @@ class TestRegistrar(BaseTestCase):
         registrar_a.generate_credentials()
         registrar_b.generate_credentials()
 
-        registry = CredentialRegistry(number_of_registrars=2, number_of_eligible_voters={STYLE_1: 2})
-        registry.register_credentials(STYLE_1, registrar_a.publish_public_credentials_for_style(STYLE_1), 0)
-        registry.register_credentials(STYLE_1, registrar_b.publish_public_credentials_for_style(STYLE_1), 1)
+        registry = make_credential_registry(
+            number_of_registrars=2,
+            number_of_eligible_voters={STYLE_1: 2},
+            shares_by_style={
+                STYLE_1: [
+                    registrar_a.publish_public_credentials_for_style(STYLE_1),
+                    registrar_b.publish_public_credentials_for_style(STYLE_1),
+                ]
+            },
+        )
 
         self.assertTrue(registrar_a.verify_registration(registry))
         self.assertTrue(registrar_b.verify_registration(registry))
 
-    def test_verify_registration_false_when_registration_incomplete(self) -> None:
+    def test_verify_registration_false_when_registrys_ballot_style_is_unknown(self) -> None:
         roll = _roll(_voter("voter-1"), _voter("voter-2"))
         registrar_a = _registrar("registrar-a", 0, roll)
         registrar_a.generate_credentials()
 
-        registry = CredentialRegistry(number_of_registrars=2, number_of_eligible_voters={STYLE_1: 2})
-        registry.register_credentials(STYLE_1, registrar_a.publish_public_credentials_for_style(STYLE_1), 0)
+        registry = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={STYLE_2: 0},
+            shares_by_style={STYLE_2: [[]]},
+        )
 
         self.assertFalse(registrar_a.verify_registration(registry))
 
@@ -155,12 +165,17 @@ class TestRegistrar(BaseTestCase):
         registrar_a.generate_credentials()
         registrar_b.generate_credentials()
 
-        registry = CredentialRegistry(number_of_registrars=2, number_of_eligible_voters={STYLE_1: 2})
-        registry.register_credentials(STYLE_1, registrar_a.publish_public_credentials_for_style(STYLE_1), 0)
-        registry.register_credentials(STYLE_1, registrar_b.publish_public_credentials_for_style(STYLE_1), 1)
-
         tampered_shares = [schnorr_keypair_random().public_key for _ in range(2)]
-        registry.register_credentials(STYLE_1, tampered_shares, 0)
+        registry = make_credential_registry(
+            number_of_registrars=2,
+            number_of_eligible_voters={STYLE_1: 2},
+            shares_by_style={
+                STYLE_1: [
+                    tampered_shares,
+                    registrar_b.publish_public_credentials_for_style(STYLE_1),
+                ]
+            },
+        )
 
         self.assertFalse(registrar_a.verify_registration(registry))
 
@@ -175,12 +190,17 @@ class TestRegistrar(BaseTestCase):
         registrar_a.generate_credentials()
         registrar_b.generate_credentials()
 
-        registry = CredentialRegistry(
-            number_of_registrars=2, number_of_eligible_voters={STYLE_1: 2, STYLE_2: 1}
+        registry = make_credential_registry(
+            number_of_registrars=2,
+            number_of_eligible_voters={STYLE_1: 2, STYLE_2: 1},
+            shares_by_style={
+                style: [
+                    registrar_a.publish_public_credentials_for_style(style),
+                    registrar_b.publish_public_credentials_for_style(style),
+                ]
+                for style in (STYLE_1, STYLE_2)
+            },
         )
-        for style in (STYLE_1, STYLE_2):
-            registry.register_credentials(style, registrar_a.publish_public_credentials_for_style(style), 0)
-            registry.register_credentials(style, registrar_b.publish_public_credentials_for_style(style), 1)
 
         self.assertTrue(registrar_a.verify_registration(registry))
         self.assertTrue(registrar_b.verify_registration(registry))
@@ -195,14 +215,20 @@ class TestRegistrar(BaseTestCase):
         registrar_a.generate_credentials()
         registrar_b.generate_credentials()
 
-        registry = CredentialRegistry(
-            number_of_registrars=2, number_of_eligible_voters={STYLE_1: 1, STYLE_2: 1}
-        )
-        for style in (STYLE_1, STYLE_2):
-            registry.register_credentials(style, registrar_a.publish_public_credentials_for_style(style), 0)
-            registry.register_credentials(style, registrar_b.publish_public_credentials_for_style(style), 1)
-
         tampered_shares = [schnorr_keypair_random().public_key]
-        registry.register_credentials(STYLE_2, tampered_shares, 0)
+        registry = make_credential_registry(
+            number_of_registrars=2,
+            number_of_eligible_voters={STYLE_1: 1, STYLE_2: 1},
+            shares_by_style={
+                STYLE_1: [
+                    registrar_a.publish_public_credentials_for_style(STYLE_1),
+                    registrar_b.publish_public_credentials_for_style(STYLE_1),
+                ],
+                STYLE_2: [
+                    tampered_shares,
+                    registrar_b.publish_public_credentials_for_style(STYLE_2),
+                ],
+            },
+        )
 
         self.assertFalse(registrar_a.verify_registration(registry))
