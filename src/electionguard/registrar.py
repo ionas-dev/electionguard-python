@@ -5,6 +5,11 @@ from electionguard.credential_registry import CredentialRegistry
 from electionguard.eligibility_roll import EligibilityRoll
 from electionguard.group import ElementModQ, g_pow_p, rand_q
 from electionguard.nonces import Nonces
+from electionguard.pedersen import (
+    PedersenCommitment,
+    PedersenOpening,
+    pedersen_open,
+)
 from electionguard.schnorr_signature import SchnorrKeyPair, SchnorrPublicKey
 from electionguard.type import BallotStyleId, RegistrarId
 
@@ -89,6 +94,10 @@ class Registrar:
                 return False
 
         return True
+
+    def verify_electoral_roll_pedesen_commitment(self, commitment: PedersenCommitment, opening: PedersenOpening) -> bool:
+        """Verify that the passed commitment matches the computed commitment of the electoral roll."""
+        return pedersen_open(*self.electoral_roll.voters, commitment=commitment, opening=opening)
 
     def send_credential_to_voter(self, id: str) -> SchnorrKeyPair:
         """""Sends the credential to a voter based on their ID."""
