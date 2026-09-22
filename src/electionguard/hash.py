@@ -60,17 +60,15 @@ CryptoHashableAll = Union[
     CryptoHashableT,
 ]
 
-def make_64byte_block(tag: bytes) -> bytes:
-    hash = sha256(tag).digest()
-    return hash + hash
-
-
-DOMAIN_TAG_DEF = make_64byte_block(b"ElectionGuard/def/v1")
-DOMAIN_TAG_AGG = make_64byte_block(b"ElectionGuard/agg/v1")
-DOMAIN_TAG_SIG = make_64byte_block(b"ElectionGuard/sig/v1")
+DOMAIN_TAG_COM = b"ElectionGuard/com/v1"
+DOMAIN_TAG_AGG = b"ElectionGuard/agg/v1"
+DOMAIN_TAG_SIG = b"ElectionGuard/sig/v1"
 
 def hash_elems(*a: CryptoHashableAll) -> ElementModQ:
     return hash_elems_with_tag(None, *a)
+
+def hash_elems_com(*a: CryptoHashableAll) -> ElementModQ:
+    return hash_elems_with_tag(DOMAIN_TAG_COM, *a)
 
 def hash_elems_agg(*a: CryptoHashableAll) -> ElementModQ:
     return hash_elems_with_tag(DOMAIN_TAG_AGG, *a)
@@ -90,7 +88,6 @@ def hash_elems_with_tag(tag: Optional[bytes], *a: CryptoHashableAll) -> ElementM
     :return: A cryptographic hash of these elements, concatenated.
     """
 
-    # Hash tag to have fixed size (32 bytes)
     h = sha256() if tag is None else sha256(tag)
 
     h.update("|".encode(BYTE_ENCODING))
