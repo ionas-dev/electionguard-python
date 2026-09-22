@@ -1,6 +1,7 @@
 from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q, g_pow_p
 from electionguard.schnorr_signature import (
     SchnorrSignature,
+    schnorr_keypair_from_secret,
     schnorr_keypair_random,
     schnorr_sign,
 )
@@ -60,3 +61,9 @@ class TestSchnorrSignature(BaseTestCase):
         tampered_response = add_q(signature.response, ONE_MOD_Q)
         tampered_signature = SchnorrSignature(signature.challenge, tampered_response)
         self.assertFalse(tampered_signature.verify(keypair.public_key, message))
+
+    def test_keypair_fails_on_small_secret_key(self) -> None:
+        small_secret_key = ONE_MOD_Q
+        keypair = schnorr_keypair_from_secret(small_secret_key)
+        self.assertIsNone(keypair)
+
