@@ -65,11 +65,11 @@ class TestSign(BaseTestCase):
 
         self.assertFalse(tampered_ballot.verify_signature())
 
-    def test_verify_signature_fails_with_tampered_crypto_hash(self) -> None:
+    def test_verify_signature_fails_with_tampered_ballot_code(self) -> None:
         signed_ballot = sign(self.ballot, self.credential)
 
         tampered_ballot = replace(
-            signed_ballot, crypto_hash=add_q(signed_ballot.crypto_hash, ONE_MOD_Q)
+            signed_ballot, code=add_q(signed_ballot.code, ONE_MOD_Q)
         )
 
         self.assertFalse(tampered_ballot.verify_signature())
