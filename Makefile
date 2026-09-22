@@ -126,6 +126,33 @@ coverage-erase:
 bench:
 	@echo 📊 BENCHMARKS
 	uv run --locked python -s tests/bench/bench_chaum_pedersen.py
+	uv run --locked python -s tests/bench/bench_sign_verify.py
+
+bench-sign-verify:
+	@echo 📊 SIGN/VERIFY BENCHMARK
+	uv run --locked python -s tests/bench/bench_sign_verify.py
+
+bench-ballot-size:
+	@echo 📊 BALLOT SIZE BENCHMARK
+	uv run --locked python -s tests/bench/bench_ballot_size.py
+
+bench-credential-registration:
+	@echo 📊 CREDENTIAL REGISTRATION BENCHMARK
+	uv run --locked python -s tests/bench/bench_credential_registration.py
+
+bench-vote:
+	@echo 📊 VOTE BENCHMARK
+	uv run --locked python -s tests/bench/bench_vote.py
+
+bench-tallying:
+	@echo 📊 TALLYING BENCHMARK
+	uv run --locked python -s tests/bench/bench_tallying.py
+
+bench-verification:
+	@echo 📊 VERIFICATION BENCHMARK
+	uv run --locked python -s tests/bench/bench_verification.py
+
+bench-election: bench-credential-registration bench-vote bench-verification
 
 # Documentation
 
