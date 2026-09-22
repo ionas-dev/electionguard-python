@@ -122,7 +122,7 @@ def submit_signed_ballot_to_box(
         )
         return None
 
-    ballot_box_ballot = submit_ballot(ballot, state)
+    ballot_box_ballot = submit_signed_ballot(ballot, state)
 
     store.set(ballot.object_id, ballot_box_ballot)
     store.set(ballot.public_credential, ballot_box_ballot)
