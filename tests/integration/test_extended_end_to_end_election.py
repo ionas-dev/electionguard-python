@@ -50,6 +50,7 @@ from electionguard.tally import (
     PlaintextTally,
     PublishedCiphertextTally,
     tally_ballots,
+    tally_signed_ballots,
 )
 from electionguard.type import BallotId, VoterId
 from electionguard.utils import get_optional
@@ -131,8 +132,9 @@ class TestEndToEndElection(BaseTestCase):
 
     # Step - Cast and Spoil
     ballot_store: DataStore[BallotId, SubmittedBallot]
+    signed_ballot_store: DataStore[BallotId, SignedSubmittedBallot]
     ballot_box: BallotBox
-    submitted_ballots: Dict[BallotId, SubmittedBallot]
+    submitted_spoiled_ballots: Dict[BallotId, SubmittedBallot]
 
     # Step - Decrypt Tally
     ciphertext_tally: CiphertextTally
@@ -435,11 +437,13 @@ class TestEndToEndElection(BaseTestCase):
 
         # Configure the Ballot Box
         self.ballot_store = DataStore()
+        self.signed_ballot_store = DataStore()
         self.ballot_box = BallotBox(
             self.internal_manifest,
             self.context,
             self.ballot_store,
-            _credential_registry=self.credential_registry,
+            self.signed_ballot_store,
+            self.credential_registry,
         )
 
         for ballot in self.signed_ballots:
@@ -463,9 +467,9 @@ class TestEndToEndElection(BaseTestCase):
 
         # Generate a Homomorphically Accumulated Tally of the ballots
         self.ciphertext_tally = get_optional(
-            tally_ballots(self.ballot_store, self.internal_manifest, self.context)
+            tally_signed_ballots(self.signed_ballot_store, self.internal_manifest, self.context, self.credential_registry)
         )
-        self.submitted_ballots = get_ballots(self.ballot_store, BallotBoxState.SPOILED)
+        self.submitted_spoiled_ballots = get_ballots(self.ballot_store, BallotBoxState.SPOILED)
         self._assert_message(
             tally_ballots.__qualname__,
             f"""
@@ -477,7 +481,7 @@ class TestEndToEndElection(BaseTestCase):
         )
 
         # Configure the Decryption
-        submitted_ballots_list = list(self.submitted_ballots.values())
+        submitted_spoiled_ballots_list = list(self.submitted_spoiled_ballots.values())
         self.decryption_mediator = DecryptionMediator(
             "decryption-mediator",
             self.context,
@@ -491,7 +495,7 @@ class TestEndToEndElection(BaseTestCase):
                 self.ciphertext_tally, self.context
             )
             ballot_shares = guardian.compute_ballot_shares(
-                submitted_ballots_list, self.context
+                submitted_spoiled_ballots_list, self.context
             )
             self.decryption_mediator.announce(
                 guardian_key, get_optional(tally_share), ballot_shares
@@ -522,7 +526,7 @@ class TestEndToEndElection(BaseTestCase):
         # Get the plaintext Spoiled Ballots
         self.plaintext_spoiled_ballots = get_optional(
             self.decryption_mediator.get_plaintext_ballots(
-                submitted_ballots_list, self.manifest
+                submitted_spoiled_ballots_list, self.manifest
             )
         )
         self._assert_message(

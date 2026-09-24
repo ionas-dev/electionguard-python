@@ -1,21 +1,24 @@
 # pylint: disable=unnecessary-comprehension
-from dataclasses import dataclass, field
-from typing import Iterable, Optional, List, Dict, Set, Tuple, Any
 from collections.abc import Container, Sized
+from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+
+from electionguard.credential_registry import CredentialRegistry
 
 from .ballot import (
     BallotBoxState,
     CiphertextBallotSelection,
-    SubmittedBallot,
     CiphertextSelection,
+    SignedSubmittedBallot,
+    SubmittedBallot,
 )
-from .data_store import DataStore
 from .ballot_validator import ballot_is_valid_for_election
+from .data_store import DataStore
 from .decryption_share import CiphertextDecryptionSelection
 from .election import CiphertextElectionContext
 from .election_object_base import ElectionObjectBase, OrderedObjectBase
 from .elgamal import ElGamalCiphertext, elgamal_add
-from .group import ElementModQ, ONE_MOD_P, ElementModP
+from .group import ONE_MOD_P, ElementModP, ElementModQ
 from .logs import log_warning
 from .manifest import InternalManifest
 from .scheduler import Scheduler
@@ -256,9 +259,52 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
         log_warning(f"append cannot add {ballot.object_id}")
         return False
 
+    def append_signed_ballot(
+        self,
+        ballot: SignedSubmittedBallot,
+        credential_registry: CredentialRegistry,
+        should_validate: bool,
+        scheduler: Optional[Scheduler] = None,
+    ) -> bool:
+        """
+        Append a Signed Ballot to the tally and recalculate the tally.
+        """
+        if not credential_registry.is_registered(ballot.style_id, ballot.public_credential):
+            log_warning(f"ballot: {ballot.object_id} credential is not registered")
+            return False
+
+        if not ballot.verify_signature():
+            log_warning(f"ballot: {ballot.object_id} failed signature verification")
+            return False
+
+        return self.append(ballot, should_validate, scheduler)
+
+    def batch_append_signed_ballots(
+        self,
+        ballots: Iterable[Tuple[str, SignedSubmittedBallot]],
+        credential_registry: CredentialRegistry,
+        should_validate: bool,
+        scheduler: Optional[Scheduler] = None,
+    ) -> bool:
+        """
+        Append a collection of Signed Ballots to the tally and recalculate
+        """
+        for ballot in ballots:
+            ballot_value = ballot[1]
+            if not credential_registry.is_registered(ballot_value.style_id, ballot_value.public_credential):
+                log_warning(f"ballot: {ballot_value.object_id} credential is not registered")
+                return False
+
+            if not ballot_value.verify_signature():
+                log_warning(f"ballot: {ballot_value.object_id} failed signature verification")
+                return False
+
+        return self.batch_append(ballots, should_validate, scheduler)
+
+
     def batch_append(
         self,
-        ballots: Iterable[Tuple[Any, SubmittedBallot]],
+        ballots: Iterable[Tuple[str, SubmittedBallot]],
         should_validate: bool,
         scheduler: Optional[Scheduler] = None,
     ) -> bool:
@@ -455,5 +501,50 @@ def tally_ballots(
         "election-results", internal_manifest, context
     )
     if tally.batch_append(store, True):
+        return tally
+    return None
+
+def tally_signed_ballot(
+    ballot: SignedSubmittedBallot,
+    tally: CiphertextTally,
+    credential_registry: CredentialRegistry,
+) -> Optional[CiphertextTally]:
+    """
+    Tally a signed ballot that is either Cast or Spoiled.
+    The caller is responsible for verifying the `credential_registry` itself,
+    it is only used here to check that this ballot's credential is registered.
+    :return: The mutated CiphertextTally or None if there is an error
+    """
+
+    if ballot.state == BallotBoxState.UNKNOWN:
+        log_warning(
+            f"tally ballots error tallying unknown state for ballot {ballot.object_id}"
+        )
+        return None
+
+    if tally.append_signed_ballot(ballot, credential_registry, True):
+        return tally
+
+    return None
+
+def tally_signed_ballots(
+    store: DataStore[str, SignedSubmittedBallot],
+    internal_manifest: InternalManifest,
+    context: CiphertextElectionContext,
+    credential_registry: CredentialRegistry
+) -> Optional[CiphertextTally]:
+    """
+    Tally all of the ballots in the ballot store.
+    :return: a CiphertextTally or None if there is an error
+    """
+    # TODO: ISSUE #14: unique Id for the tally
+    tally: CiphertextTally = CiphertextTally(
+        "election-results", internal_manifest, context
+    )
+
+    if (not credential_registry.verify()):
+        return None
+
+    if tally.batch_append_signed_ballots(store, credential_registry, True):
         return tally
     return None

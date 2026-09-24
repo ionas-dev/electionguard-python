@@ -77,7 +77,7 @@ def submit_signed_ballot_to_box(
     internal_manifest: InternalManifest,
     context: CiphertextElectionContext,
     store: DataStore,
-    signature_store: DataStore,
+    signed_store: DataStore,
     credential_registry: Optional[CredentialRegistry],
 ) -> Optional[SignedSubmittedBallot]:
     """
@@ -115,7 +115,7 @@ def submit_signed_ballot_to_box(
     # TODO: ISSUE #56: check if the ballot includes the nonce, and regenerate the proofs
     # TODO: ISSUE #56: check if the ballot includes the proofs, if it does not include the nonce
 
-    existing_ballot = store.get(ballot.public_credential)
+    existing_ballot = signed_store.get(ballot.public_credential)
     if existing_ballot is not None:
         log_warning(
             f"error accepting ballot, {ballot.object_id} already exists with state: {existing_ballot.state}"
@@ -125,7 +125,7 @@ def submit_signed_ballot_to_box(
     ballot_box_ballot = submit_signed_ballot(ballot, state)
 
     store.set(ballot.object_id, ballot_box_ballot)
-    store.set(ballot.public_credential, ballot_box_ballot)
+    signed_store.set(ballot.public_credential, ballot_box_ballot)
     return store.get(ballot_box_ballot.object_id)
 
 
@@ -163,6 +163,16 @@ def submit_ballot_to_box(
 
 
 def get_ballots(
+    store: DataStore, state: Optional[BallotBoxState]
+) -> Dict[BallotId, SubmittedBallot]:
+    """Get ballots from the store optionally filtering on state."""
+    return {
+        ballot_id: ballot
+        for (ballot_id, ballot) in store.items()
+        if state is None or ballot.state == state
+    }
+
+def get_spoiled_ballots(
     store: DataStore, state: Optional[BallotBoxState]
 ) -> Dict[BallotId, SubmittedBallot]:
     """Get ballots from the store optionally filtering on state."""
@@ -222,9 +232,9 @@ def cast_ballot(ballot: CiphertextBallot) -> SubmittedBallot:
         BallotBoxState.CAST,
     )
 
-def cast_signed_ballot(ballot: SignedBallot) -> SubmittedBallot:
+def cast_signed_ballot(ballot: SignedBallot) -> SignedSubmittedBallot:
     """
-    Convert a `CiphertextBallot` into a `SubmittedBallot`, with all nonces removed.
+    Convert a `SignedBallot` into a `SignedSubmittedBallot`, with all nonces removed.
     Declare a ballot as CAST.
     """
     return submit_signed_ballot(

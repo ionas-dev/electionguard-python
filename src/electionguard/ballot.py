@@ -1075,29 +1075,15 @@ def make_ciphertext_signed_ballot(
     )
 
 @dataclass(unsafe_hash=True)
-class SignedSubmittedBallot(SignedBallot):
+class SignedSubmittedBallot(SubmittedBallot, SignedBallot):
     """
-    A `SubmittedBallot` represents a ballot that is submitted for inclusion in election results.
-    A submitted ballot is or is about to be either cast or spoiled.
-    The state supports the `BallotBoxState.UNKNOWN` enumeration to indicate that this object is mutable
-    and has not yet been explicitly assigned a specific state.
+    A `SignedSubmittedBallot` is a `SubmittedBallot` that additionally carries the
+    signature of the voter credential it was cast with.
 
     Note, additionally, this ballot includes all proofs but no nonces.
 
-    Do not make this class directly. Use `make_ciphertext_submitted_ballot` instead.
+    Do not make this class directly. Use `make_signed_submitted_ballot` instead.
     """
-
-    state: BallotBoxState
-
-    def __eq__(self, other: Any) -> bool:
-        return (
-            isinstance(other, SubmittedBallot)
-            and super().__eq__(other)
-            and self.state == other.state
-        )
-
-    def __ne__(self, other: Any) -> bool:
-        return not self.__eq__(other)
 
 def make_signed_submitted_ballot(
     object_id: str,
