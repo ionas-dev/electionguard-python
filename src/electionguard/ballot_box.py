@@ -172,16 +172,6 @@ def get_ballots(
         if state is None or ballot.state == state
     }
 
-def get_spoiled_ballots(
-    store: DataStore, state: Optional[BallotBoxState]
-) -> Dict[BallotId, SubmittedBallot]:
-    """Get ballots from the store optionally filtering on state."""
-    return {
-        ballot_id: ballot
-        for (ballot_id, ballot) in store.items()
-        if state is None or ballot.state == state
-    }
-
 
 def submit_ballot(
     ballot: CiphertextBallot, state: BallotBoxState = BallotBoxState.UNKNOWN
