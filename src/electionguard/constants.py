@@ -53,7 +53,7 @@ STANDARD_CONSTANTS = create_constants(
 # These constants serve as sets of primes for future developers
 # Currently, all the sets are all valid but may break certain tests
 # As tests adapt, these constants can be used to speed up tests
-EXTRA_SMALL_TEST_CONSTANTS = create_constants(157, 13, 12, 16, 99)
+EXTRA_SMALL_TEST_CONSTANTS = create_constants(157, 13, 12, 16, 153)
 SMALL_TEST_CONSTANTS = create_constants(503, 251, 2, 5, 9)
 MEDIUM_TEST_CONSTANTS = create_constants(65267, 32633, 2, 3, 9)
 LARGE_TEST_CONSTANTS = create_constants(
