@@ -201,3 +201,66 @@ class TestCredentialRegistry(BaseTestCase):
         )
 
         self.assertFalse(registry.verify())
+
+    def test_is_registered_false_for_an_unknown_ballot_style(self) -> None:
+        registry = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={STYLE_A: 1},
+            shares_by_style={STYLE_A: [_public_keys(1)]},
+        )
+        registered_key = registry.entries(STYLE_A)[0].aggregated_public_key
+
+        self.assertFalse(registry.is_registered("unknown-style", registered_key))
+
+    def test_verify_false_when_a_style_has_no_eligible_voter_count(self) -> None:
+        built = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={STYLE_A: 1},
+            shares_by_style={STYLE_A: [_public_keys(1)]},
+        )
+        registry = CredentialRegistry(
+            number_of_registrars=1,
+            number_of_eligible_voters={},
+            credentials_by_style=built.credentials_by_style,
+        )
+
+        self.assertFalse(registry.verify())
+
+    def test_verify_false_when_a_credential_is_registered_twice_across_registrars(
+        self,
+    ) -> None:
+        # Two voters whose shares are identical for every registrar end up with the
+        # same aggregated credential, which would allow one of them to vote twice.
+        shares = _public_keys(1)
+        registry = make_credential_registry(
+            number_of_registrars=2,
+            number_of_eligible_voters={STYLE_A: 2},
+            shares_by_style={STYLE_A: [shares * 2, shares * 2]},
+        )
+
+        self.assertFalse(registry.verify())
+
+    def test_verify_false_when_a_share_is_replaced_but_the_aggregate_is_kept(self) -> None:
+        # Ties the aggregate used for verification to the shares the registrars published.
+        registry = make_credential_registry(
+            number_of_registrars=2,
+            number_of_eligible_voters={STYLE_A: 1},
+            shares_by_style={STYLE_A: [_public_keys(1), _public_keys(1)]},
+        )
+        registry.entries(STYLE_A)[0].shares[1] = schnorr_keypair_random().public_key
+
+        self.assertFalse(registry.verify())
+
+    def test_verify_true_when_fewer_voters_registered_than_eligible(self) -> None:
+        built = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={STYLE_A: 1},
+            shares_by_style={STYLE_A: [_public_keys(1)]},
+        )
+        registry = CredentialRegistry(
+            number_of_registrars=1,
+            number_of_eligible_voters={STYLE_A: 2},
+            credentials_by_style=built.credentials_by_style,
+        )
+
+        self.assertTrue(registry.verify())

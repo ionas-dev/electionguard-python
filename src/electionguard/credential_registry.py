@@ -36,7 +36,8 @@ class CredentialRegistry:
     def is_registered(self, ballot_style_id: BallotStyleId, public_key: SchnorrPublicKey) -> bool:
         """Is this aggregated public credential registered for this ballot style?"""
         return any(
-            entry.aggregated_public_key == public_key for entry in self.entries(ballot_style_id)
+            entry.aggregated_public_key == public_key
+            for entry in self.credentials_by_style.get(ballot_style_id, [])
         )
 
     def verify(self) -> bool:
@@ -47,7 +48,7 @@ class CredentialRegistry:
         """
 
         for ballot_style_id, credentials in self.credentials_by_style.items():
-            if len(credentials) > self.number_of_eligible_voters[ballot_style_id]:
+            if len(credentials) > self.number_of_eligible_voters.get(ballot_style_id, 0):
                 return False
 
             aggregated_keys = [credential.aggregated_public_key for credential in credentials]

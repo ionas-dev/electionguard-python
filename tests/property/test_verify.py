@@ -38,6 +38,7 @@ from electionguard_verify.verify import (
     verify_aggregation,
     verify_ballot,
     verify_ballot_eligibility,
+    verify_credential_registry,
     verify_decryption,
     verify_key_aggregation,
 )
@@ -131,6 +132,45 @@ class TestVerify(BaseTestCase):
         tampered_ballot = replace(signed_ballot, signature=tampered_signature)
 
         verification = verify_ballot_eligibility(tampered_ballot, registry)
+
+        self.assertFalse(verification.verified)
+
+    def test_verify_ballot_eligibility_false_when_contents_are_swapped(self) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        other_ballot, _ = self._make_signed_ballot()
+        registry = self._registered_registry(signed_ballot.style_id, share.public_key)
+        swapped_ballot = replace(
+            signed_ballot,
+            contests=other_ballot.contests,
+            crypto_hash=other_ballot.crypto_hash,
+        )
+
+        verification = verify_ballot_eligibility(swapped_ballot, registry)
+
+        self.assertFalse(verification.verified)
+
+    def test_verify_ballot_eligibility_false_when_style_unknown_to_registry(self) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        registry = self._registered_registry("other-style", share.public_key)
+
+        verification = verify_ballot_eligibility(signed_ballot, registry)
+
+        self.assertFalse(verification.verified)
+
+    def test_verify_credential_registry_true_for_a_valid_registry(self) -> None:
+        registry = self._registered_registry(
+            "some-style", schnorr_keypair_random().public_key, schnorr_keypair_random().public_key
+        )
+
+        verification = verify_credential_registry(registry)
+
+        self.assertTrue(verification.verified)
+
+    def test_verify_credential_registry_false_for_an_invalid_registry(self) -> None:
+        share = schnorr_keypair_random().public_key
+        registry = self._registered_registry("some-style", share, share)
+
+        verification = verify_credential_registry(registry)
 
         self.assertFalse(verification.verified)
 

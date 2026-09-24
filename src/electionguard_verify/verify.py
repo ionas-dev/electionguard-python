@@ -71,6 +71,24 @@ def verify_ballot_eligibility(
 
     return Verification(True, message=None)
 
+def verify_credential_registry(
+    registry: CredentialRegistry,
+) -> Verification:
+    """
+    Method to verify the published credential registry (ValidateRegistration): per ballot style,
+    no more credentials than eligible voters, pairwise distinct credentials, one share per
+    registrar, and every aggregated credential matching the aggregation of its shares.
+    """
+
+    if not registry.verify():
+        return Verification(
+            False,
+            message="verify_credential_registry: credential registry is not valid",
+        )
+
+    return Verification(True, message=None)
+
+
 def verify_decryption(
     tally: PlaintextTally,
     election_public_keys: Dict[GuardianId, ElectionPublicKey],
@@ -117,24 +135,3 @@ def verify_aggregation(
         False,
         message="verify_aggregation: aggregated value of ballots doesn't matches with tally",
     )
-
-
-def verify_key_aggregation(
-    entries: List[Credential],
-) -> Verification:
-    """
-    Method to independently verify that every published Credential's
-    aggregated_public_key is actually the MuSig aggregation of its own
-    shares. Guards against a registry publisher claiming a wrong aggregated
-    credential for some entry.
-    """
-
-    for entry in entries:
-        if aggregate_public_key(entry.shares) != entry.aggregated_public_key:
-            return Verification(
-                False,
-                message="verify_key_aggregation: an entry's aggregated_public_key "
-                "does not match the aggregation of its own shares",
-            )
-
-    return Verification(True, message=None)

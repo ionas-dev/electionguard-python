@@ -7,8 +7,8 @@ from electionguard_verify.verify import (
     verify_aggregation,
     verify_ballot,
     verify_ballot_eligibility,
+    verify_credential_registry,
     verify_decryption,
-    verify_key_aggregation,
 )
 
 __all__ = [
@@ -17,8 +17,8 @@ __all__ = [
     "verify_aggregation",
     "verify_ballot",
     "verify_ballot_eligibility",
+    "verify_credential_registry",
     "verify_decryption",
-    "verify_key_aggregation",
 ]
 
 # </AUTOGEN_INIT>
