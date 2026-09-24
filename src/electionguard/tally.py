@@ -1,7 +1,7 @@
 # pylint: disable=unnecessary-comprehension
 from collections.abc import Container, Sized
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
 
 from electionguard.credential_registry import CredentialRegistry
 
@@ -202,6 +202,9 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
     """A local cache of ballots id's that have already been cast"""
     spoiled_ballot_ids: Set[BallotId] = field(default_factory=lambda: set())
 
+    _cast_credentials: Set[ElementModP] = field(default_factory=lambda: set())
+    """A local cache of the credentials of signed ballots that have already been cast"""
+
     contests: Dict[ContestId, CiphertextTallyContest] = field(init=False)
     """
     A collection of each contest and selection in an election.
@@ -261,45 +264,65 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
 
     def append_signed_ballot(
         self,
-        ballot: SignedSubmittedBallot,
+        ballot: SubmittedBallot,
         credential_registry: CredentialRegistry,
         should_validate: bool,
         scheduler: Optional[Scheduler] = None,
     ) -> bool:
         """
-        Append a Signed Ballot to the tally and recalculate the tally.
+        Append a Ballot to the tally and recalculate the tally.
+        A cast ballot needs to be signed with a registered credential, a spoiled
+        ballot is not counted and therefore does not need to be signed.
         """
-        if not credential_registry.is_registered(ballot.style_id, ballot.public_credential):
-            log_warning(f"ballot: {ballot.object_id} credential is not registered")
+        if ballot.state != BallotBoxState.CAST:
+            return self.append(ballot, should_validate, scheduler)
+
+        if not _is_eligible(ballot, credential_registry):
             return False
 
-        if not ballot.verify_signature():
-            log_warning(f"ballot: {ballot.object_id} failed signature verification")
+        credential = cast(SignedSubmittedBallot, ballot).public_credential
+        if credential in self._cast_credentials:
+            log_warning(f"ballot: {ballot.object_id} credential was already used")
             return False
 
-        return self.append(ballot, should_validate, scheduler)
+        if not self.append(ballot, should_validate, scheduler):
+            return False
+
+        self._cast_credentials.add(credential)
+        return True
 
     def batch_append_signed_ballots(
         self,
-        ballots: Iterable[Tuple[str, SignedSubmittedBallot]],
+        ballots: Iterable[Tuple[str, SubmittedBallot]],
         credential_registry: CredentialRegistry,
         should_validate: bool,
         scheduler: Optional[Scheduler] = None,
     ) -> bool:
         """
-        Append a collection of Signed Ballots to the tally and recalculate
+        Append a collection of Ballots to the tally and recalculate.
+        Every cast ballot needs to be signed with a registered credential that
+        is not used by any other cast ballot, in this batch or already in the tally.
         """
-        for ballot in ballots:
-            ballot_value = ballot[1]
-            if not credential_registry.is_registered(ballot_value.style_id, ballot_value.public_credential):
-                log_warning(f"ballot: {ballot_value.object_id} credential is not registered")
+        ballots = list(ballots)
+        used_credentials: Set[ElementModP] = set()
+        for _, ballot in ballots:
+            if ballot.state != BallotBoxState.CAST:
+                continue
+
+            if not _is_eligible(ballot, credential_registry):
                 return False
 
-            if not ballot_value.verify_signature():
-                log_warning(f"ballot: {ballot_value.object_id} failed signature verification")
+            credential = cast(SignedSubmittedBallot, ballot).public_credential
+            if credential in used_credentials or credential in self._cast_credentials:
+                log_warning(f"ballot: {ballot.object_id} credential was already used")
                 return False
+            used_credentials.add(credential)
 
-        return self.batch_append(ballots, should_validate, scheduler)
+        if not self.batch_append(ballots, should_validate, scheduler):
+            return False
+
+        self._cast_credentials.update(used_credentials)
+        return True
 
 
     def batch_append(
@@ -504,8 +527,27 @@ def tally_ballots(
         return tally
     return None
 
+def _is_eligible(
+    ballot: SubmittedBallot, credential_registry: CredentialRegistry
+) -> bool:
+    """Is the ballot signed with a credential that is registered for its style?"""
+    if not isinstance(ballot, SignedSubmittedBallot):
+        log_warning(f"ballot: {ballot.object_id} is not signed")
+        return False
+
+    if not credential_registry.is_registered(ballot.style_id, ballot.public_credential):
+        log_warning(f"ballot: {ballot.object_id} credential is not registered")
+        return False
+
+    if not ballot.verify_signature():
+        log_warning(f"ballot: {ballot.object_id} failed signature verification")
+        return False
+
+    return True
+
+
 def tally_signed_ballot(
-    ballot: SignedSubmittedBallot,
+    ballot: SubmittedBallot,
     tally: CiphertextTally,
     credential_registry: CredentialRegistry,
 ) -> Optional[CiphertextTally]:
@@ -528,13 +570,14 @@ def tally_signed_ballot(
     return None
 
 def tally_signed_ballots(
-    store: DataStore[str, SignedSubmittedBallot],
+    store: DataStore[str, SubmittedBallot],
     internal_manifest: InternalManifest,
     context: CiphertextElectionContext,
     credential_registry: CredentialRegistry
 ) -> Optional[CiphertextTally]:
     """
-    Tally all of the ballots in the ballot store.
+    Tally all of the ballots in the ballot store, requiring a valid `credential_registry`
+    and every cast ballot to be signed with a distinct registered credential.
     :return: a CiphertextTally or None if there is an error
     """
     # TODO: ISSUE #14: unique Id for the tally
