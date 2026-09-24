@@ -1053,7 +1053,7 @@ class SignedBallot(CiphertextBallot):
     public_credential: SchnorrPublicKey
 
     def verify_signature(self) -> bool:
-        return self.signature.verify(self.public_credential, self.code)
+        return self.signature.verify(self.public_credential, self.crypto_hash)
 
 def make_ciphertext_signed_ballot(
     ballot: CiphertextBallot,

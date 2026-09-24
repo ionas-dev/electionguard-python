@@ -2,6 +2,8 @@ from dataclasses import replace
 from typing import override
 
 import electionguard_tools.factories.election_factory as ElectionFactory
+from electionguard.ballot import BallotBoxState
+from electionguard.ballot_box import cast_signed_ballot
 from electionguard.elgamal import elgamal_keypair_from_secret
 from electionguard.encrypt import encrypt_ballot
 from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q, g_pow_p
@@ -23,10 +25,13 @@ class TestSign(BaseTestCase):
         internal_manifest, context = election_factory.get_fake_ciphertext_election(
             manifest, keypair.public_key
         )
-        plaintext_ballot = election_factory.get_fake_ballot(manifest)
+        self.plaintext_ballot = election_factory.get_fake_ballot(manifest)
+        self.internal_manifest = internal_manifest
+        self.context = context
+        self.seed = seed
 
         self.ballot = get_optional(
-            encrypt_ballot(plaintext_ballot, internal_manifest, context, seed)
+            encrypt_ballot(self.plaintext_ballot, internal_manifest, context, seed)
         )
         self.credential = schnorr_keypair_random()
 
@@ -65,11 +70,38 @@ class TestSign(BaseTestCase):
 
         self.assertFalse(tampered_ballot.verify_signature())
 
-    def test_verify_signature_fails_with_tampered_ballot_code(self) -> None:
+
+    def test_verify_signature_fails_when_encrypted_contents_are_swapped(self) -> None:
+        signed_ballot = sign(self.ballot, self.credential)
+        other_encryption = get_optional(
+            encrypt_ballot(
+                self.plaintext_ballot, self.internal_manifest, self.context, self.seed
+            )
+        )
+
+        swapped_ballot = replace(
+            signed_ballot,
+            contests=other_encryption.contests,
+            crypto_hash=other_encryption.crypto_hash,
+        )
+
+        self.assertFalse(swapped_ballot.verify_signature())
+
+    def test_verify_signature_fails_with_tampered_crypto_hash(self) -> None:
         signed_ballot = sign(self.ballot, self.credential)
 
         tampered_ballot = replace(
-            signed_ballot, code=add_q(signed_ballot.code, ONE_MOD_Q)
+            signed_ballot, crypto_hash=add_q(signed_ballot.crypto_hash, ONE_MOD_Q)
         )
 
         self.assertFalse(tampered_ballot.verify_signature())
+
+    def test_signature_survives_submission_to_the_ballot_box(self) -> None:
+        signed_ballot = sign(self.ballot, self.credential)
+
+        submitted_ballot = cast_signed_ballot(signed_ballot)
+
+        self.assertEqual(submitted_ballot.state, BallotBoxState.CAST)
+        self.assertEqual(submitted_ballot.signature, signed_ballot.signature)
+        self.assertEqual(submitted_ballot.public_credential, signed_ballot.public_credential)
+        self.assertTrue(submitted_ballot.verify_signature())

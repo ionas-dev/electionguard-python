@@ -1,4 +1,5 @@
 from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q, g_pow_p
+from electionguard.hash import hash_elems, hash_elems_sig
 from electionguard.schnorr_signature import (
     SchnorrSignature,
     schnorr_keypair_from_secret,
@@ -67,3 +68,17 @@ class TestSchnorrSignature(BaseTestCase):
         keypair = schnorr_keypair_from_secret(small_secret_key)
         self.assertIsNone(keypair)
 
+
+    def test_challenge_is_derived_with_the_signature_domain_hash(self) -> None:
+        keypair = schnorr_keypair_random()
+        message = TWO_MOD_Q
+        nonce = ONE_MOD_Q
+
+        signature = schnorr_sign(nonce, message, keypair)
+
+        self.assertEqual(
+            signature.challenge, hash_elems_sig(keypair.public_key, g_pow_p(nonce), message)
+        )
+        self.assertNotEqual(
+            signature.challenge, hash_elems(keypair.public_key, g_pow_p(nonce), message)
+        )
