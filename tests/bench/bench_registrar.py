@@ -77,7 +77,7 @@ def verify_electoral_roll_bench(
     registrar: Registrar, commitment: PedersenCommitment, opening: PedersenOpening
 ) -> float:
     start = timer()
-    verified = registrar.verify_electoral_roll_pedesen_commitment(commitment, opening)
+    verified = registrar.verify_electoral_roll_commitment(commitment, opening)
     end = timer()
     if not verified:
         raise Exception("Wasn't expecting an invalid commitment during a benchmark!")

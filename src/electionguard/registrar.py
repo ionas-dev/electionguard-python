@@ -96,7 +96,7 @@ class Registrar:
 
         return True
 
-    def verify_electoral_roll_pedesen_commitment(self, commitment: PedersenCommitment, opening: PedersenOpening) -> bool:
+    def verify_electoral_roll_commitment(self, commitment: PedersenCommitment, opening: PedersenOpening) -> bool:
         """Verify that the passed commitment matches the computed commitment of the electoral roll."""
         return pedersen_open(*self.electoral_roll.voters, commitment=commitment, opening=opening)
 
