@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 from electionguard.credential_registry import CredentialRegistry
+from electionguard.schnorr_signature import SchnorrPublicKey
 from electionguard.sign import SignedBallot
 
 from .ballot import (
@@ -27,7 +28,9 @@ class BallotBox:
     _internal_manifest: InternalManifest = field()
     _encryption: CiphertextElectionContext = field()
     _store: DataStore = field(default_factory=lambda: DataStore())
-    _signed_store: DataStore = field(default_factory=lambda: DataStore())
+    _signed_store: DataStore[SchnorrPublicKey, SignedSubmittedBallot] = field(
+        default_factory=lambda: DataStore()
+    )
     _credential_registry: Optional[CredentialRegistry] = None
 
     def cast(self, ballot: CiphertextBallot) -> Optional[SubmittedBallot]:
@@ -74,8 +77,8 @@ def submit_signed_ballot_to_box(
     state: BallotBoxState,
     internal_manifest: InternalManifest,
     context: CiphertextElectionContext,
-    store: DataStore,
-    signed_store: DataStore,
+    store: DataStore[BallotId, SubmittedBallot],
+    signed_store: DataStore[SchnorrPublicKey, SignedSubmittedBallot],
     credential_registry: Optional[CredentialRegistry],
 ) -> Optional[SignedSubmittedBallot]:
     """
@@ -124,7 +127,7 @@ def submit_signed_ballot_to_box(
 
     store.set(ballot.object_id, ballot_box_ballot)
     signed_store.set(ballot.public_credential, ballot_box_ballot)
-    return store.get(ballot_box_ballot.object_id)
+    return ballot_box_ballot
 
 
 def submit_ballot_to_box(
