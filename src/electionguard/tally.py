@@ -1,7 +1,7 @@
 # pylint: disable=unnecessary-comprehension
 from collections.abc import Container, Sized
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, cast
+from typing import Dict, Iterable, List, Optional, Set, Tuple, cast
 
 from electionguard.credential_registry import CredentialRegistry
 
@@ -271,8 +271,7 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
     ) -> bool:
         """
         Append a Ballot to the tally and recalculate the tally.
-        A cast ballot needs to be signed with a registered credential, a spoiled
-        ballot is not counted and therefore does not need to be signed.
+        A cast ballot needs a registered credential that was not used yet.
         """
         if ballot.state != BallotBoxState.CAST:
             return self.append(ballot, should_validate, scheduler)
@@ -299,31 +298,39 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
         scheduler: Optional[Scheduler] = None,
     ) -> bool:
         """
-        Append a collection of Ballots to the tally and recalculate.
-        Every cast ballot needs to be signed with a registered credential that
-        is not used by any other cast ballot, in this batch or already in the tally.
+        Append a collection of Ballots to the tally and recalculate. Skips cast ballots
+        without a registered credential or with a credential that was already used.
         """
-        ballots = list(ballots)
+        tallied_ballots: List[Tuple[str, SubmittedBallot]] = []
         used_credentials: Set[ElementModP] = set()
-        for _, ballot in ballots:
-            if ballot.state != BallotBoxState.CAST:
+        for ballot_id, ballot in ballots:
+            if ballot in self or not ballot_is_valid_for_election(
+                ballot, self._internal_manifest, self._encryption, should_validate
+            ):
                 continue
 
-            if not _is_eligible(ballot, credential_registry):
-                return False
+            if ballot.state == BallotBoxState.CAST:
+                if not _is_eligible(ballot, credential_registry):
+                    continue
 
-            credential = cast(SignedSubmittedBallot, ballot).public_credential
-            if credential in used_credentials or credential in self._cast_credentials:
-                log_warning(f"ballot: {ballot.object_id} credential was already used")
-                return False
-            used_credentials.add(credential)
+                credential = cast(SignedSubmittedBallot, ballot).public_credential
+                if (
+                    credential in used_credentials
+                    or credential in self._cast_credentials
+                ):
+                    log_warning(
+                        f"ballot: {ballot.object_id} credential was already used"
+                    )
+                    continue
+                used_credentials.add(credential)
 
-        if not self.batch_append(ballots, should_validate, scheduler):
+            tallied_ballots.append((ballot_id, ballot))
+
+        if not self.batch_append(tallied_ballots, False, scheduler):
             return False
 
         self._cast_credentials.update(used_credentials)
         return True
-
 
     def batch_append(
         self,
@@ -337,6 +344,7 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
         cast_ballot_selections: Dict[SelectionId, Dict[BallotId, ElGamalCiphertext]] = (
             {}
         )
+        cast_ballot_ids: Set[BallotId] = set()
         for ballot in ballots:
             # get the value of the dict
             ballot_value = ballot[1]
@@ -344,6 +352,7 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
                 ballot_value, self._internal_manifest, self._encryption, should_validate
             ):
                 if ballot_value.state == BallotBoxState.CAST:
+                    cast_ballot_ids.add(ballot_value.object_id)
 
                     # collect the selections so they can can be accumulated in parallel
                     for contest in ballot_value.contests:
@@ -361,11 +370,7 @@ class CiphertextTally(ElectionObjectBase, Container, Sized):
 
         # cache the cast ballot id's so they are not double counted
         if self._execute_accumulate(cast_ballot_selections, scheduler):
-            for ballot in ballots:
-                # get the value of the dict
-                ballot_value = ballot[1]
-                if ballot_value.state == BallotBoxState.CAST:
-                    self.cast_ballot_ids.add(ballot_value.object_id)
+            self.cast_ballot_ids.update(cast_ballot_ids)
             return True
 
         return False
@@ -527,6 +532,7 @@ def tally_ballots(
         return tally
     return None
 
+
 def _is_eligible(
     ballot: SubmittedBallot, credential_registry: CredentialRegistry
 ) -> bool:
@@ -569,23 +575,23 @@ def tally_signed_ballot(
 
     return None
 
+
 def tally_signed_ballots(
     store: DataStore[str, SubmittedBallot],
     internal_manifest: InternalManifest,
     context: CiphertextElectionContext,
-    credential_registry: CredentialRegistry
+    credential_registry: CredentialRegistry,
 ) -> Optional[CiphertextTally]:
     """
-    Tally all of the ballots in the ballot store, requiring a valid `credential_registry`
-    and every cast ballot to be signed with a distinct registered credential.
-    :return: a CiphertextTally or None if there is an error
+    Tally all of the ballots in the ballot store.
+    :return: a CiphertextTally or None if the credential registry is invalid
     """
     # TODO: ISSUE #14: unique Id for the tally
     tally: CiphertextTally = CiphertextTally(
         "election-results", internal_manifest, context
     )
 
-    if (not credential_registry.verify()):
+    if not credential_registry.verify():
         return None
 
     if tally.batch_append_signed_ballots(store, credential_registry, True):
