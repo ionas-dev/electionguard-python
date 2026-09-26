@@ -117,7 +117,6 @@ def make_ciphertext_election_context(
     # - subgroup order (𝑞),
     # - generator (𝑔),
     # - number of guardians (𝑛),
-    # - number of registrars (m),
     # - decryption threshold value (𝑘),
     # to form a base hash code (𝑄) which will be incorporated
     # into every subsequent hash computation in the election.
@@ -134,7 +133,6 @@ def make_ciphertext_election_context(
         ElementModP(get_generator(), False),
         number_of_guardians,
         quorum,
-        number_of_registrars,
         manifest_hash,
     )
     crypto_extended_base_hash = hash_elems(crypto_base_hash, commitment_hash)
