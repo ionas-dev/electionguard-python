@@ -55,15 +55,15 @@ class Registrar:
     def publish_public_credentials(self) -> list[SchnorrPublicKey]:
         """Publishes the public credentials for each voter in the electoral roll."""
 
-        return [self.credentials[voter.object_id].public_key for voter in self.electoral_roll.voters]
+        return [
+            self.credentials[voter.object_id].public_key
+            for voter in self.electoral_roll.voters
+        ]
 
-    def publish_public_credentials_for_style(self, ballot_style_id: BallotStyleId) -> list[SchnorrPublicKey]:
-        """
-        Publishes this registrar's public credential shares for every voter
-        eligible for `ballot_style_id`, in electoral roll order. Used to
-        register credentials with a CredentialRegistry, which keeps entries
-        partitioned per ballot style.
-        """
+    def publish_public_credentials_for_style(
+        self, ballot_style_id: BallotStyleId
+    ) -> list[SchnorrPublicKey]:
+        """Publishes the public credentials of the voters with this ballot style in electoral roll order."""
         return [
             self.credentials[voter.object_id].public_key
             for voter in self.electoral_roll.voters
@@ -71,12 +71,10 @@ class Registrar:
         ]
 
     def verify_registration(self, registry: CredentialRegistry) -> bool:
-        """
-        Verify that every one of this registrar's own shares was correctly
-        and completely published in `registry`, for every ballot style this
-        registrar's voters belong to.
-        """
-        ballot_style_ids = {voter.ballot_style_id for voter in self.electoral_roll.voters}
+        """Verify that the registry contains the shares of this registrar for every voter."""
+        ballot_style_ids = {
+            voter.ballot_style_id for voter in self.electoral_roll.voters
+        }
 
         for ballot_style_id in ballot_style_ids:
             own_shares = self.publish_public_credentials_for_style(ballot_style_id)
@@ -96,9 +94,13 @@ class Registrar:
 
         return True
 
-    def verify_electoral_roll_commitment(self, commitment: PedersenCommitment, opening: PedersenOpening) -> bool:
+    def verify_electoral_roll_commitment(
+        self, commitment: PedersenCommitment, opening: PedersenOpening
+    ) -> bool:
         """Verify that the passed commitment matches the computed commitment of the electoral roll."""
-        return pedersen_open(*self.electoral_roll.voters, commitment=commitment, opening=opening)
+        return pedersen_open(
+            *self.electoral_roll.voters, commitment=commitment, opening=opening
+        )
 
     def send_credential_to_voter(self, id: str) -> SchnorrKeyPair:
         """Sends the credential to a voter based on their ID."""
@@ -111,12 +113,14 @@ class Registrar:
     def generate_credentials(self) -> None:
         """Generates a Schnorr key pair for each voter in the electoral roll."""
 
-        for (i, voter) in enumerate(self.electoral_roll.voters):
+        for i, voter in enumerate(self.electoral_roll.voters):
             nonce = self.nonces.get_with_headers(i, voter.object_id)
             credential = self.generate_credential(nonce)
             self.credentials[voter.object_id] = credential
 
-    def generate_credential(self, nonce: Optional[ElementModQ] = None) -> SchnorrKeyPair:
+    def generate_credential(
+        self, nonce: Optional[ElementModQ] = None
+    ) -> SchnorrKeyPair:
         """Generates one Schnorr key pair"""
 
         secret_key = nonce if nonce is not None else rand_q()
@@ -124,4 +128,3 @@ class Registrar:
 
         keypair = SchnorrKeyPair(secret_key, public_key)
         return keypair
-

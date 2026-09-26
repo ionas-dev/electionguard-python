@@ -7,7 +7,10 @@ from electionguard.hash import CryptoHashableAll, hash_elems_com
 PedersenCommitment = ElementModP
 PedersenOpening = ElementModQ
 
-def pedersen_commit(*message: CryptoHashableAll, opening: Optional[PedersenOpening] = None) -> Tuple[PedersenCommitment, PedersenOpening]:
+
+def pedersen_commit(
+    *message: CryptoHashableAll, opening: Optional[PedersenOpening] = None
+) -> Tuple[PedersenCommitment, PedersenOpening]:
     hash = hash_elems_com(*message)
     opening = opening if opening is not None else rand_q()
     generator = get_generator()
@@ -19,5 +22,10 @@ def pedersen_commit(*message: CryptoHashableAll, opening: Optional[PedersenOpeni
     commitment = mult_p(message_component, blinding_component)
     return (commitment, opening)
 
-def pedersen_open(*message: CryptoHashableAll, commitment: PedersenCommitment, opening: PedersenOpening) -> bool:
+
+def pedersen_open(
+    *message: CryptoHashableAll,
+    commitment: PedersenCommitment,
+    opening: PedersenOpening,
+) -> bool:
     return pedersen_commit(*message, opening=opening) == (commitment, opening)

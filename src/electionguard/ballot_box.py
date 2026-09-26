@@ -31,9 +31,7 @@ class BallotBox:
     _credential_registry: Optional[CredentialRegistry] = None
 
     def cast(self, ballot: CiphertextBallot) -> Optional[SubmittedBallot]:
-        """Cast a specific encrypted `CiphertextBallot`. Refused if this
-        election has a credential registry configured — such an election
-        requires ballots to be signed and cast via `cast_signed` instead."""
+        """Cast a specific encrypted `CiphertextBallot`, unless the election requires signed ballots."""
         if self._credential_registry is not None:
             log_warning(
                 f"ballot: {ballot.object_id} rejected, this election requires signed ballots"
@@ -191,6 +189,7 @@ def submit_ballot(
         state,
     )
 
+
 def submit_signed_ballot(
     ballot: SignedBallot, state: BallotBoxState = BallotBoxState.UNKNOWN
 ) -> SignedSubmittedBallot:
@@ -221,6 +220,7 @@ def cast_ballot(ballot: CiphertextBallot) -> SubmittedBallot:
         ballot,
         BallotBoxState.CAST,
     )
+
 
 def cast_signed_ballot(ballot: SignedBallot) -> SignedSubmittedBallot:
     """

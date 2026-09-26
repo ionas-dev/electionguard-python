@@ -34,6 +34,7 @@ DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(__file__), "results", "registrar_benchmark.json"
 )
 
+
 def make_electoral_roll(count: int) -> ElectoralRoll:
     voters = [
         Voter(f"voter-{i}", f"Voter {i}", ContactInformation(), STYLE_ID)
@@ -41,11 +42,13 @@ def make_electoral_roll(count: int) -> ElectoralRoll:
     ]
     return ElectoralRoll(f"roll-{count}", voters)
 
+
 def make_registrars(electoral_roll: ElectoralRoll) -> List[Registrar]:
     return [
         Registrar(f"registrar-{j}", j, electoral_roll)
         for j in range(NUMBER_OF_REGISTRARS)
     ]
+
 
 def make_registry(registrars: List[Registrar], count: int) -> CredentialRegistry:
     return make_credential_registry(
@@ -59,19 +62,24 @@ def make_registry(registrars: List[Registrar], count: int) -> CredentialRegistry
         },
     )
 
+
 def generate_credentials_bench(registrar: Registrar) -> float:
     start = timer()
     registrar.generate_credentials()
     end = timer()
     return end - start
 
-def verify_registration_bench(registrar: Registrar, registry: CredentialRegistry) -> float:
+
+def verify_registration_bench(
+    registrar: Registrar, registry: CredentialRegistry
+) -> float:
     start = timer()
     verified = registrar.verify_registration(registry)
     end = timer()
     if not verified:
         raise Exception("Wasn't expecting an invalid registration during a benchmark!")
     return end - start
+
 
 def verify_electoral_roll_bench(
     registrar: Registrar, commitment: PedersenCommitment, opening: PedersenOpening
@@ -82,6 +90,7 @@ def verify_electoral_roll_bench(
     if not verified:
         raise Exception("Wasn't expecting an invalid commitment during a benchmark!")
     return end - start
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

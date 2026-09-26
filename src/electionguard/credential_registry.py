@@ -7,9 +7,7 @@ from electionguard.type import BallotStyleId
 
 @dataclass
 class Credential:
-    """A credential consists of every registrar's public key share that went
-    into it (ordered by registrar sequence_order), and the resulting aggregated
-    public key."""
+    """The public key shares of a voter, ordered by registrar sequence_order, and their aggregate."""
 
     shares: list[SchnorrPublicKey]
     aggregated_public_key: SchnorrPublicKey
@@ -17,11 +15,7 @@ class Credential:
 
 @dataclass
 class CredentialRegistry:
-    """
-    Publicly published registry of registered credentials, kept separate per
-    ballot style. Built in one step by `make_credential_registry` from every
-    registrar's published shares.
-    """
+    """The published credentials of the voters per ballot style."""
 
     number_of_registrars: int
     number_of_eligible_voters: dict[BallotStyleId, int]
@@ -33,7 +27,9 @@ class CredentialRegistry:
             raise ValueError(f"unknown ballot style: {ballot_style_id}")
         return self.credentials_by_style[ballot_style_id]
 
-    def is_registered(self, ballot_style_id: BallotStyleId, public_key: SchnorrPublicKey) -> bool:
+    def is_registered(
+        self, ballot_style_id: BallotStyleId, public_key: SchnorrPublicKey
+    ) -> bool:
         """Is this aggregated public credential registered for this ballot style?"""
         return any(
             entry.aggregated_public_key == public_key
@@ -48,20 +44,29 @@ class CredentialRegistry:
         """
 
         for ballot_style_id, credentials in self.credentials_by_style.items():
-            if len(credentials) > self.number_of_eligible_voters.get(ballot_style_id, 0):
+            if len(credentials) > self.number_of_eligible_voters.get(
+                ballot_style_id, 0
+            ):
                 return False
 
-            aggregated_keys = [credential.aggregated_public_key for credential in credentials]
+            aggregated_keys = [
+                credential.aggregated_public_key for credential in credentials
+            ]
             if len(aggregated_keys) != len(set(aggregated_keys)):
                 return False
 
-            if any(len(credential.shares) != self.number_of_registrars for credential in credentials):
+            if any(
+                len(credential.shares) != self.number_of_registrars
+                for credential in credentials
+            ):
                 return False
 
             if any(
-                aggregate_public_key(credential.shares) != credential.aggregated_public_key
+                aggregate_public_key(credential.shares)
+                != credential.aggregated_public_key
                 for credential in credentials
-            ): return False
+            ):
+                return False
 
         return True
 
@@ -72,9 +77,8 @@ def make_credential_registry(
     shares_by_style: dict[BallotStyleId, list[list[SchnorrPublicKey]]],
 ) -> CredentialRegistry:
     """
-    Builds a CredentialRegistry in one step from every registrar's published
-    shares. `shares_by_style` maps each ballot style to the ordered (by
-    registrar sequence_order) list of that registrar's published shares
+    Build the credential registry from the shares of every registrar, where `shares_by_style`
+    contains the shares of each registrar per ballot style, ordered by sequence_order.
     """
     unknown_styles = set(shares_by_style) - set(number_of_eligible_voters)
     if unknown_styles:
@@ -102,4 +106,6 @@ def make_credential_registry(
             for shares in zip(*ordered_shares)
         ]
 
-    return CredentialRegistry(number_of_registrars, number_of_eligible_voters, credentials_by_style)
+    return CredentialRegistry(
+        number_of_registrars, number_of_eligible_voters, credentials_by_style
+    )

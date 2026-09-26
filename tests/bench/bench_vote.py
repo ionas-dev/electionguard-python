@@ -62,6 +62,7 @@ DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(__file__), "results", "vote_benchmark.json"
 )
 
+
 def make_manifest(num_contests: int, candidates_per_contest: int) -> Manifest:
     """A manifest with `num_contests` single-winner contests, each with
     `candidates_per_contest` candidates, all under one ballot style."""
@@ -110,12 +111,14 @@ def make_manifest(num_contests: int, candidates_per_contest: int) -> Manifest:
         ballot_styles=[ballot_style],
     )
 
+
 def make_plaintext_ballot(
     manifest: Manifest, style_id: str, ballot_id: str
 ) -> PlaintextBallot:
     return PlaintextBallot(
         ballot_id, style_id, [contest_from(contest) for contest in manifest.contests]
     )
+
 
 def register_voters(
     style_id: str, count: int
@@ -150,11 +153,15 @@ def register_voters(
 
     key_pairs = {
         voter.object_id: aggregate_key_pair(
-            [registrar.send_credential_to_voter(voter.object_id) for registrar in registrars]
+            [
+                registrar.send_credential_to_voter(voter.object_id)
+                for registrar in registrars
+            ]
         )
         for voter in voters
     }
     return voters, key_pairs, credential_registry
+
 
 def encrypt_bench(
     ballot: PlaintextBallot,
@@ -168,6 +175,7 @@ def encrypt_bench(
     )
     end = timer()
     return end - start, ciphertext_ballot
+
 
 def encrypt_and_sign_bench(
     ballot: PlaintextBallot,
@@ -184,6 +192,7 @@ def encrypt_and_sign_bench(
     end = timer()
     return end - start, signed_ballot
 
+
 def cast_bench(ballot_box: BallotBox, ballot: CiphertextBallot) -> float:
     start = timer()
     submitted = ballot_box.cast(ballot)
@@ -192,6 +201,7 @@ def cast_bench(ballot_box: BallotBox, ballot: CiphertextBallot) -> float:
         raise Exception("Wasn't expecting a rejected ballot during a benchmark!")
     return end - start
 
+
 def cast_signed_bench(ballot_box: BallotBox, ballot: SignedBallot) -> float:
     start = timer()
     submitted = ballot_box.cast_signed(ballot)
@@ -199,6 +209,7 @@ def cast_signed_bench(ballot_box: BallotBox, ballot: SignedBallot) -> float:
     if submitted is None:
         raise Exception("Wasn't expecting a rejected ballot during a benchmark!")
     return end - start
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
@@ -224,9 +235,11 @@ if __name__ == "__main__":
         # --- unsigned election ---
         unsigned_ballot_box = BallotBox(internal_manifest, context)
         encrypt_timings: List[float] = []
-        cast_timings: List[float]  = []
+        cast_timings: List[float] = []
 
-        print(f"  Benchmarking Vote, unsigned ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)")
+        print(
+            f"  Benchmarking Vote, unsigned ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)"
+        )
         for i in range(REPEATS):
             plaintext_ballot = make_plaintext_ballot(
                 manifest, style_id, f"vote-{label}-unsigned-{i}"
@@ -250,7 +263,9 @@ if __name__ == "__main__":
         )
         encrypt_sign_timings: List[float] = []
         cast_signed_timings: List[float] = []
-        print(f"  Benchmarking Vote, signed ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)")
+        print(
+            f"  Benchmarking Vote, signed ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)"
+        )
         for i in range(REPEATS):
             plaintext_ballot = make_plaintext_ballot(
                 manifest, style_id, f"vote-{label}-signed-{i}"

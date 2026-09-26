@@ -27,8 +27,10 @@ DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(__file__), "results", "ballot_size_benchmark.json"
 )
 
+
 def size_in_bytes(ballot: object) -> int:
     return len(to_raw(ballot).encode("utf-8"))
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
@@ -41,7 +43,9 @@ if __name__ == "__main__":
     results = {}
     for num_contests, candidates_per_contest in BALLOT_STYLES:
         label = f"{num_contests}x{candidates_per_contest}"
-        print(f"\nBallot style: {label} ({num_contests} contests | {candidates_per_contest} candidates)")
+        print(
+            f"\nBallot style: {label} ({num_contests} contests | {candidates_per_contest} candidates)"
+        )
 
         manifest = make_manifest(num_contests, candidates_per_contest)
         style_id = manifest.ballot_styles[0].object_id

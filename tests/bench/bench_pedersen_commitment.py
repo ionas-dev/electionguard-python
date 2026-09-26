@@ -30,6 +30,7 @@ DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(__file__), "results", "pedersen_commitment_benchmark.json"
 )
 
+
 def make_voters(count: int) -> List[Voter]:
     """A synthetic electoral roll of `count` voters, reused across every commit/open call."""
     return [
@@ -42,12 +43,14 @@ def make_voters(count: int) -> List[Voter]:
         for i in range(count)
     ]
 
+
 def commit_bench(message: List[CryptoHashableAll]) -> float:
     """Commit to the message once, return elapsed seconds."""
     start = timer()
     _ = pedersen_commit(*message)
     end = timer()
     return end - start
+
 
 def open_bench(
     message: List[CryptoHashableAll],
@@ -62,6 +65,7 @@ def open_bench(
         raise Exception("Wasn't expecting an invalid opening during a benchmark!")
     return end - start
 
+
 def bench_message(message: List[CryptoHashableAll]) -> dict:
     print(f"  Benchmarking Commit ({REPEATS} repetitions)")
     commit_timings = [commit_bench(message) for _ in range(REPEATS)]
@@ -73,6 +77,7 @@ def bench_message(message: List[CryptoHashableAll]) -> dict:
     print_stats("Open", open_timings)
 
     return {"commit": stats(commit_timings), "open": stats(open_timings)}
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

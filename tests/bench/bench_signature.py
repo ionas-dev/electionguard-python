@@ -28,6 +28,7 @@ DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(__file__), "results", "sign_verify_benchmark.json"
 )
 
+
 def make_ballot() -> CiphertextBallot:
     """One encrypted ballot, reused across every sign/verify call."""
     election_factory = ElectionFactory()
@@ -42,12 +43,14 @@ def make_ballot() -> CiphertextBallot:
         encrypt_ballot(plaintext_ballot, internal_manifest, context, seed)
     )
 
+
 def keygen_bench() -> float:
     """KeyGen once, return elapsed seconds."""
     start = timer()
     _ = schnorr_keypair_random()
     end = timer()
     return end - start
+
 
 def sign_bench(ballot: CiphertextBallot) -> float:
     """Sign the ballot once with a fresh key pair/nonce, return elapsed seconds."""
@@ -58,12 +61,14 @@ def sign_bench(ballot: CiphertextBallot) -> float:
     end = timer()
     return end - start
 
+
 def verify_bench(signed_ballot: SignedBallot) -> float:
     """Verify the ballot once, return elapsed seconds."""
     start = timer()
     _ = signed_ballot.verify_signature()
     end = timer()
     return end - start
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
@@ -83,7 +88,9 @@ if __name__ == "__main__":
     print_stats("Sign", sign_timings)
 
     print(f"\nBenchmarking Verify ({VERIFY_REPEATS} repetitions)")
-    signed_ballots = [sign(ballot, schnorr_keypair_random()) for _ in range(VERIFY_REPEATS)]
+    signed_ballots = [
+        sign(ballot, schnorr_keypair_random()) for _ in range(VERIFY_REPEATS)
+    ]
     verify_timings = [verify_bench(signed_ballot) for signed_ballot in signed_ballots]
     print_stats("Verify", verify_timings)
 

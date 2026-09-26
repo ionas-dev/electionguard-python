@@ -38,6 +38,7 @@ DEFAULT_OUTPUT = os.path.join(
     os.path.dirname(__file__), "results", "verify_benchmark.json"
 )
 
+
 def verify_ballot_bench(
     ballot: CiphertextBallot, manifest: Manifest, context: CiphertextElectionContext
 ) -> float:
@@ -48,6 +49,7 @@ def verify_ballot_bench(
         raise Exception("Wasn't expecting an invalid ballot during a benchmark!")
     return end - start
 
+
 def verify_ballot_eligibility_bench(
     ballot: SignedBallot, registry: CredentialRegistry
 ) -> float:
@@ -57,6 +59,7 @@ def verify_ballot_eligibility_bench(
     if not verification.verified:
         raise Exception("Wasn't expecting an ineligible ballot during a benchmark!")
     return end - start
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
@@ -87,7 +90,9 @@ if __name__ == "__main__":
         signed_ballot = sign(ciphertext_ballot, next(iter(key_pairs.values())))
 
         # --- unsigned election ---
-        print(f"  Benchmarking Verify, unsigned ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)")
+        print(
+            f"  Benchmarking Verify, unsigned ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)"
+        )
         verify_timings = [
             verify_ballot_bench(ciphertext_ballot, manifest, context)
             for _ in range(REPEATS)
@@ -95,7 +100,9 @@ if __name__ == "__main__":
         print_stats("Verify Ballot", verify_timings)
 
         # --- signed election ---
-        print(f"  Benchmarking Verify, signed ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)")
+        print(
+            f"  Benchmarking Verify, signed ({REPEATS} repetitions | {num_contests} contests | {candidates_per_contest} candidates)"
+        )
         eligibility_timings = [
             verify_ballot_eligibility_bench(signed_ballot, credential_registry)
             for _ in range(REPEATS)

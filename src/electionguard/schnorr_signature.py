@@ -20,12 +20,14 @@ SchnorrSecretKey = ElementModQ
 SchnorrPublicKey = ElementModP
 SchnorrMessage = CryptoHashableAll
 
+
 @dataclass
 class SchnorrKeyPair:
     """A tuple of a Schnorr secret key and public key."""
 
     secret_key: SchnorrSecretKey
     public_key: SchnorrPublicKey
+
 
 @dataclass
 class SchnorrSignature:
@@ -43,7 +45,9 @@ class SchnorrSignature:
         return computed_challenge == self.challenge
 
 
-def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrKeyPair) -> SchnorrSignature:
+def schnorr_sign(
+    nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrKeyPair
+) -> SchnorrSignature:
     """Sign a message using the Schnorr signature scheme."""
     commitment = g_pow_p(nonce)
     challenge = hash_elems_sig(key_pair.public_key, commitment, message)
@@ -52,7 +56,9 @@ def schnorr_sign(nonce: ElementModQ, message: SchnorrMessage, key_pair: SchnorrK
     return SchnorrSignature(challenge, response)
 
 
-def schnorr_keypair_from_secret(secret_key: SchnorrSecretKey) -> Optional[SchnorrKeyPair]:
+def schnorr_keypair_from_secret(
+    secret_key: SchnorrSecretKey,
+) -> Optional[SchnorrKeyPair]:
     """
     Given an Schnorr secret key (typically, a random number in [2,Q)), returns
     an Schnorr keypair, consisting of the given secret key a and public key g^a.

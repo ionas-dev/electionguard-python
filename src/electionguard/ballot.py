@@ -1047,6 +1047,7 @@ def make_ciphertext_submitted_ballot(
         state,
     )
 
+
 @dataclass(unsafe_hash=True)
 class SignedBallot(CiphertextBallot):
     signature: SchnorrSignature
@@ -1055,10 +1056,11 @@ class SignedBallot(CiphertextBallot):
     def verify_signature(self) -> bool:
         return self.signature.verify(self.public_credential, self.crypto_hash)
 
+
 def make_ciphertext_signed_ballot(
     ballot: CiphertextBallot,
     signature: SchnorrSignature,
-    public_credential: SchnorrPublicKey
+    public_credential: SchnorrPublicKey,
 ) -> SignedBallot:
     return SignedBallot(
         ballot.object_id,
@@ -1071,8 +1073,9 @@ def make_ciphertext_signed_ballot(
         ballot.crypto_hash,
         ballot.nonce,
         signature,
-        public_credential
+        public_credential,
     )
+
 
 @dataclass(unsafe_hash=True)
 class SignedSubmittedBallot(SubmittedBallot, SignedBallot):
@@ -1084,6 +1087,7 @@ class SignedSubmittedBallot(SubmittedBallot, SignedBallot):
 
     Do not make this class directly. Use `make_signed_submitted_ballot` instead.
     """
+
 
 def make_signed_submitted_ballot(
     object_id: str,

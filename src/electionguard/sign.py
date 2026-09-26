@@ -9,7 +9,11 @@ from electionguard.schnorr_signature import (
 from .ballot import CiphertextBallot, SignedBallot, make_ciphertext_signed_ballot
 
 
-def sign(ballot: CiphertextBallot, key_pair: SchnorrKeyPair, nonce: Optional[ElementModQ] = None) -> SignedBallot:
+def sign(
+    ballot: CiphertextBallot,
+    key_pair: SchnorrKeyPair,
+    nonce: Optional[ElementModQ] = None,
+) -> SignedBallot:
     message = ballot.crypto_hash
     nonce = nonce if nonce is not None else rand_q()
     signature = schnorr_sign(nonce, message, key_pair)
