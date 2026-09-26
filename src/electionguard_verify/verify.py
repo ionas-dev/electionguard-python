@@ -1,15 +1,20 @@
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 
-from electionguard.ballot import CiphertextBallot, SubmittedBallot
-from electionguard.credential_registry import Credential, CredentialRegistry
+from electionguard.ballot import (
+    BallotBoxState,
+    CiphertextBallot,
+    SignedSubmittedBallot,
+    SubmittedBallot,
+)
+from electionguard.credential_registry import CredentialRegistry
 from electionguard.election import CiphertextElectionContext
+from electionguard.group import ElementModP
 from electionguard.key_ceremony import ElectionPublicKey
 from electionguard.manifest import (
     InternalManifest,
     Manifest,
 )
-from electionguard.musig import aggregate_public_key
 from electionguard.sign import SignedBallot
 from electionguard.tally import CiphertextTally, PlaintextTally
 from electionguard.type import GuardianId
@@ -71,13 +76,12 @@ def verify_ballot_eligibility(
 
     return Verification(True, message=None)
 
+
 def verify_credential_registry(
     registry: CredentialRegistry,
 ) -> Verification:
     """
-    Method to verify the published credential registry (ValidateRegistration): per ballot style,
-    no more credentials than eligible voters, pairwise distinct credentials, one share per
-    registrar, and every aggregated credential matching the aggregation of its shares.
+    Method to verify the credential registry
     """
 
     if not registry.verify():
@@ -134,4 +138,46 @@ def verify_aggregation(
     return Verification(
         False,
         message="verify_aggregation: aggregated value of ballots doesn't matches with tally",
+    )
+
+
+def verify_aggregation_with_credentials(
+    submitted_ballots: List[SubmittedBallot],
+    tally: CiphertextTally,
+    credential_registry: CredentialRegistry,
+    manifest: Manifest,
+    context: CiphertextElectionContext,
+) -> Verification:
+    new_tally = CiphertextTally("verify", InternalManifest(manifest), context)
+    used_credentials: Set[ElementModP] = set()
+
+    for ballot in submitted_ballots:
+        if ballot.state == BallotBoxState.CAST:
+            if not isinstance(ballot, SignedSubmittedBallot):
+                return Verification(
+                    False,
+                    message=f"verify_aggregation_with_credentials: cast ballot {ballot.object_id} is not signed",
+                )
+
+            credential = ballot.public_credential
+            if credential in used_credentials:
+                return Verification(
+                    False,
+                    message="verify_aggregation_with_credentials: ballots contain duplicate credentials",
+                )
+            used_credentials.add(credential)
+
+        new_tally.append_signed_ballot(ballot, credential_registry, True)
+
+    if (
+        isinstance(tally, CiphertextTally)
+        and new_tally.cast_ballot_ids == tally.cast_ballot_ids
+        and new_tally.spoiled_ballot_ids == tally.spoiled_ballot_ids
+        and new_tally.contests == tally.contests
+    ):
+        return Verification(True, message=None)
+
+    return Verification(
+        False,
+        message="verify_aggregation_with_credentials: aggregated value of ballots doesn't matches with tally",
     )

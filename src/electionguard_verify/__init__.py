@@ -5,6 +5,7 @@ from electionguard_verify import verify
 from electionguard_verify.verify import (
     Verification,
     verify_aggregation,
+    verify_aggregation_with_credentials,
     verify_ballot,
     verify_ballot_eligibility,
     verify_credential_registry,
@@ -15,6 +16,7 @@ __all__ = [
     "Verification",
     "verify",
     "verify_aggregation",
+    "verify_aggregation_with_credentials",
     "verify_ballot",
     "verify_ballot_eligibility",
     "verify_credential_registry",
