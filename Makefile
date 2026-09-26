@@ -1,4 +1,4 @@
-.PHONY: all environment openssl-fix install build auto-lint lint validate test test-example unit-tests property-tests integration-tests coverage coverage-html coverage-xml coverage-erase bench fetch-sample-data generate-sample-data docs-serve docs-build docs-deploy-ci dependency-graph-ci publish-ci publish-test-ci release-zip-ci release-notes egui start-db stop-db build-egui start-egui stop-egui eg-e2e-simple-election eg-setup-simple-election
+.PHONY: all environment openssl-fix install build auto-lint lint validate test test-example unit-tests property-tests integration-tests coverage coverage-html coverage-xml coverage-erase bench bench-election fetch-sample-data generate-sample-data docs-serve docs-build docs-deploy-ci dependency-graph-ci publish-ci publish-test-ci release-zip-ci release-notes egui start-db stop-db build-egui start-egui stop-egui eg-e2e-simple-election eg-setup-simple-election
 
 UV := $(shell command -v uv 2>/dev/null || true)
 ifeq ($(UV),)
@@ -123,36 +123,28 @@ coverage-erase:
 	@uv run --locked coverage erase
 
 # Benchmark
+# BENCH_OUT: directory for JSON results (default: each script's tests/bench/results/)
+# BENCH_EXCLUDE: space-separated benchmark names to skip, e.g. "chaum_pedersen vote"
+BENCH_NAMES := ballot_size chaum_pedersen pedersen_commitment registrar signature verify vote
+BENCH_OUT ?=
+BENCH_EXCLUDE ?=
+
 bench:
 	@echo 📊 BENCHMARKS
+	@for name in $(filter-out $(BENCH_EXCLUDE),$(BENCH_NAMES)); do \
+		$(MAKE) --no-print-directory bench-$$name || exit 1; \
+	done
+
+# Usage: make bench-<name> [BENCH_OUT=dir]
+bench-chaum-pedersen bench-chaum_pedersen:
+	@echo 📊 CHAUM-PEDERSEN BENCHMARK
 	uv run --locked python -s tests/bench/bench_chaum_pedersen.py
-	uv run --locked python -s tests/bench/bench_sign_verify.py
 
-bench-sign-verify:
-	@echo 📊 SIGN/VERIFY BENCHMARK
-	uv run --locked python -s tests/bench/bench_sign_verify.py
+bench-%:
+	@echo 📊 $* BENCHMARK
+	uv run --locked python -s tests/bench/bench_$*.py $(if $(BENCH_OUT),--output "$(subst ~/,$(HOME)/,$(BENCH_OUT))/$*.json")
 
-bench-ballot-size:
-	@echo 📊 BALLOT SIZE BENCHMARK
-	uv run --locked python -s tests/bench/bench_ballot_size.py
-
-bench-credential-registration:
-	@echo 📊 CREDENTIAL REGISTRATION BENCHMARK
-	uv run --locked python -s tests/bench/bench_credential_registration.py
-
-bench-vote:
-	@echo 📊 VOTE BENCHMARK
-	uv run --locked python -s tests/bench/bench_vote.py
-
-bench-tallying:
-	@echo 📊 TALLYING BENCHMARK
-	uv run --locked python -s tests/bench/bench_tallying.py
-
-bench-verification:
-	@echo 📊 VERIFICATION BENCHMARK
-	uv run --locked python -s tests/bench/bench_verification.py
-
-bench-election: bench-credential-registration bench-vote bench-verification
+bench-election: bench-registrar bench-vote bench-verify
 
 # Documentation
 
