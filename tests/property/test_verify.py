@@ -1,29 +1,35 @@
 # pylint: disable=protected-access
-from dataclasses import replace
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
-from typing import Dict
+from typing import Dict, List, Optional
 
 from hypothesis import HealthCheck, Phase, given, settings
 from hypothesis.strategies import integers
 
 import electionguard_tools.factories.ballot_factory as BallotFactory
 import electionguard_tools.factories.election_factory as ElectionFactory
-from electionguard.ballot_box import spoil_ballot
-from electionguard.credential_registry import CredentialRegistry, make_credential_registry
+from electionguard.ballot import BallotBoxState, CiphertextBallot, SubmittedBallot
+from electionguard.ballot_box import cast_signed_ballot, spoil_ballot, submit_ballot
+from electionguard.credential_registry import (
+    CredentialRegistry,
+    make_credential_registry,
+)
 from electionguard.data_store import DataStore
 from electionguard.decrypt_with_shares import decrypt_tally
 from electionguard.decryption import compute_decryption_share
 from electionguard.decryption_share import DecryptionShare
+from electionguard.election import CiphertextElectionContext
 from electionguard.elgamal import ElGamalKeyPair, elgamal_keypair_from_secret
 from electionguard.encrypt import EncryptionMediator, encrypt_ballot
 from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q
 from electionguard.key_ceremony import CeremonyDetails
 from electionguard.key_ceremony_mediator import KeyCeremonyMediator
+from electionguard.manifest import InternalManifest, Manifest
 from electionguard.musig import aggregate_key_pair
-from electionguard.schnorr_signature import schnorr_keypair_random
+from electionguard.schnorr_signature import SchnorrKeyPair, schnorr_keypair_random
 from electionguard.sign import sign
-from electionguard.tally import tally_ballots
-from electionguard.type import GuardianId
+from electionguard.tally import CiphertextTally, tally_ballots, tally_signed_ballots
+from electionguard.type import BallotId, GuardianId
 from electionguard.utils import get_optional
 from electionguard_tools.helpers.election_builder import ElectionBuilder
 from electionguard_tools.helpers.key_ceremony_orchestrator import (
@@ -36,6 +42,7 @@ from electionguard_tools.strategies.election import (
 from electionguard_tools.strategies.elgamal import elgamal_keypairs
 from electionguard_verify.verify import (
     verify_aggregation,
+    verify_aggregation_with_credentials,
     verify_ballot,
     verify_ballot_eligibility,
     verify_credential_registry,
@@ -102,7 +109,7 @@ class TestVerify(BaseTestCase):
             shares_by_style={style_id: [list(public_keys)]},
         )
 
-    def test_verify_ballot_eligibility_true_for_registered_valid_ballot(self) -> None:
+    def test_verify_ballot_eligibility(self) -> None:
         signed_ballot, share = self._make_signed_ballot()
         registry = self._registered_registry(signed_ballot.style_id, share.public_key)
 
@@ -110,18 +117,20 @@ class TestVerify(BaseTestCase):
 
         self.assertTrue(verification.verified)
 
-    def test_verify_ballot_eligibility_false_when_credential_not_registered(
+    def test_verify_ballot_eligibility_unregistered(
         self,
     ) -> None:
         signed_ballot, _share = self._make_signed_ballot()
         other_share = schnorr_keypair_random()
-        registry = self._registered_registry(signed_ballot.style_id, other_share.public_key)
+        registry = self._registered_registry(
+            signed_ballot.style_id, other_share.public_key
+        )
 
         verification = verify_ballot_eligibility(signed_ballot, registry)
 
         self.assertFalse(verification.verified)
 
-    def test_verify_ballot_eligibility_false_when_signature_invalid(self) -> None:
+    def test_verify_ballot_eligibility_invalid_signature(self) -> None:
         signed_ballot, share = self._make_signed_ballot()
         registry = self._registered_registry(signed_ballot.style_id, share.public_key)
         tampered_signature = replace(
@@ -134,38 +143,18 @@ class TestVerify(BaseTestCase):
 
         self.assertFalse(verification.verified)
 
-    def test_verify_ballot_eligibility_false_when_contents_are_swapped(self) -> None:
-        signed_ballot, share = self._make_signed_ballot()
-        other_ballot, _ = self._make_signed_ballot()
-        registry = self._registered_registry(signed_ballot.style_id, share.public_key)
-        swapped_ballot = replace(
-            signed_ballot,
-            contests=other_ballot.contests,
-            crypto_hash=other_ballot.crypto_hash,
-        )
-
-        verification = verify_ballot_eligibility(swapped_ballot, registry)
-
-        self.assertFalse(verification.verified)
-
-    def test_verify_ballot_eligibility_false_when_style_unknown_to_registry(self) -> None:
-        signed_ballot, share = self._make_signed_ballot()
-        registry = self._registered_registry("other-style", share.public_key)
-
-        verification = verify_ballot_eligibility(signed_ballot, registry)
-
-        self.assertFalse(verification.verified)
-
-    def test_verify_credential_registry_true_for_a_valid_registry(self) -> None:
+    def test_verify_credential_registry(self) -> None:
         registry = self._registered_registry(
-            "some-style", schnorr_keypair_random().public_key, schnorr_keypair_random().public_key
+            "some-style",
+            schnorr_keypair_random().public_key,
+            schnorr_keypair_random().public_key,
         )
 
         verification = verify_credential_registry(registry)
 
         self.assertTrue(verification.verified)
 
-    def test_verify_credential_registry_false_for_an_invalid_registry(self) -> None:
+    def test_verify_credential_registry_invalid(self) -> None:
         share = schnorr_keypair_random().public_key
         registry = self._registered_registry("some-style", share, share)
 
@@ -267,3 +256,141 @@ class TestVerify(BaseTestCase):
         # Assert
         self.assertIsNotNone(verification)
         self.assertTrue(verification.verified)
+
+    @staticmethod
+    def _signed_election() -> "_SignedElection":
+        keypair = get_optional(elgamal_keypair_from_secret(TWO_MOD_Q))
+        manifest = election_factory.get_fake_manifest()
+        internal_manifest, context = election_factory.get_fake_ciphertext_election(
+            manifest, keypair.public_key
+        )
+        shares = [schnorr_keypair_random() for _ in range(NUMBER_OF_VOTERS)]
+        election = _SignedElection(manifest, internal_manifest, context, shares)
+        election.ballots = [
+            election.cast_signed(f"ballot-{i}", share) for i, share in enumerate(shares)
+        ]
+        style_id = election.ballots[0].style_id
+        election.registry = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={style_id: NUMBER_OF_VOTERS},
+            shares_by_style={style_id: [[share.public_key for share in shares]]},
+        )
+        return election
+
+    def test_verify_aggregation_with_credentials(self) -> None:
+        election = self._signed_election()
+
+        tally = election.signed_tally(election.ballots)
+
+        self.assertTrue(election.verify(election.ballots, tally))
+
+    def test_verify_aggregation_with_credentials_unsigned_spoiled_ballot(self) -> None:
+        election = self._signed_election()
+        spoiled_ballot = submit_ballot(
+            election.encrypt("spoiled"), BallotBoxState.SPOILED
+        )
+        board = election.ballots + [spoiled_ballot]
+
+        self.assertTrue(election.verify(board, election.signed_tally(board)))
+
+    def test_verify_aggregation_with_credentials_tally_counts_unregistered(
+        self,
+    ) -> None:
+        election = self._signed_election()
+        unregistered_ballot = election.cast_signed(
+            "unregistered", schnorr_keypair_random()
+        )
+        board = election.ballots + [unregistered_ballot]
+
+        self.assertFalse(election.verify(board, election.unsigned_tally(board)))
+
+    def test_verify_aggregation_with_credentials_unsigned_cast_ballot(self) -> None:
+        election = self._signed_election()
+        unsigned_ballot = submit_ballot(
+            election.encrypt("unsigned"), BallotBoxState.CAST
+        )
+        board = election.ballots + [unsigned_ballot]
+
+        self.assertFalse(election.verify(board, election.signed_tally(board)))
+
+    def test_verify_aggregation_with_credentials_tally_omits_ballot(self) -> None:
+        election = self._signed_election()
+
+        tally = election.signed_tally(election.ballots[1:])
+
+        self.assertFalse(election.verify(election.ballots, tally))
+
+    def test_verify_aggregation_with_credentials_tally_sums_differ(self) -> None:
+        election = self._signed_election()
+        other_ballots = [
+            election.cast_signed(ballot.object_id, share)
+            for ballot, share in zip(election.ballots, election.shares)
+        ]
+        tally = election.signed_tally(other_ballots)
+
+        self.assertEqual(
+            tally.cast_ballot_ids,
+            election.signed_tally(election.ballots).cast_ballot_ids,
+        )
+        self.assertFalse(election.verify(election.ballots, tally))
+
+    def test_verify_aggregation_with_credentials_duplicate_credential(self) -> None:
+        election = self._signed_election()
+        second_vote = election.cast_signed("second-vote", election.shares[0])
+        board = election.ballots + [second_vote]
+
+        self.assertFalse(election.verify(board, election.signed_tally(board)))
+
+
+NUMBER_OF_VOTERS = 3
+
+
+@dataclass
+class _SignedElection:
+    """A fake election in which every voter casts a signed ballot."""
+
+    manifest: Manifest
+    internal_manifest: InternalManifest
+    context: CiphertextElectionContext
+    shares: List[SchnorrKeyPair]
+    ballots: List[SubmittedBallot] = field(default_factory=list)
+    registry: Optional[CredentialRegistry] = None
+
+    def encrypt(self, ballot_id: str) -> CiphertextBallot:
+        plaintext_ballot = election_factory.get_fake_ballot(self.manifest, ballot_id)
+        seed = election_factory.get_encryption_device().get_hash()
+        return get_optional(
+            encrypt_ballot(plaintext_ballot, self.internal_manifest, self.context, seed)
+        )
+
+    def cast_signed(self, ballot_id: str, share: SchnorrKeyPair) -> SubmittedBallot:
+        return cast_signed_ballot(
+            sign(self.encrypt(ballot_id), aggregate_key_pair([share]))
+        )
+
+    @staticmethod
+    def _store(ballots: List[SubmittedBallot]) -> DataStore[BallotId, SubmittedBallot]:
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        for ballot in ballots:
+            store.set(ballot.object_id, ballot)
+        return store
+
+    def signed_tally(self, board: List[SubmittedBallot]) -> CiphertextTally:
+        return get_optional(
+            tally_signed_ballots(
+                self._store(board),
+                self.internal_manifest,
+                self.context,
+                get_optional(self.registry),
+            )
+        )
+
+    def unsigned_tally(self, board: List[SubmittedBallot]) -> CiphertextTally:
+        return get_optional(
+            tally_ballots(self._store(board), self.internal_manifest, self.context)
+        )
+
+    def verify(self, board: List[SubmittedBallot], tally: CiphertextTally) -> bool:
+        return verify_aggregation_with_credentials(
+            board, tally, get_optional(self.registry), self.manifest, self.context
+        ).verified

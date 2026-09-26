@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-import unittest
 from dataclasses import asdict
 from os import path, remove
 from random import randint
@@ -40,8 +39,8 @@ from electionguard.manifest import InternalManifest, Manifest
 from electionguard.musig import aggregate_key_pair
 from electionguard.pedersen import pedersen_commit
 from electionguard.registrar import ElectoralRoll, Registrar
-from electionguard.schnorr_signature import SchnorrKeyPair
-from electionguard.serialize import construct_path, from_file
+from electionguard.schnorr_signature import SchnorrKeyPair, SchnorrPublicKey
+from electionguard.serialize import construct_path, from_file, to_file
 
 # Step 4 - Decrypt Tally
 from electionguard.sign import SignedBallot, sign
@@ -82,7 +81,17 @@ from electionguard_tools.helpers.export import (
     export_private_data,
     export_record,
 )
+from electionguard_verify.verify import (
+    verify_aggregation,
+    verify_aggregation_with_credentials,
+    verify_ballot,
+    verify_ballot_eligibility,
+    verify_credential_registry,
+    verify_decryption,
+)
 from tests.base_test_case import BaseTestCase
+
+CREDENTIAL_REGISTRY_FILE_NAME = "credential_registry"
 
 devices_directory = path.join(ELECTION_RECORD_DIR, DEVICES_DIR)
 guardians_directory = path.join(ELECTION_RECORD_DIR, GUARDIANS_DIR)
@@ -132,7 +141,7 @@ class TestEndToEndElection(BaseTestCase):
 
     # Step - Cast and Spoil
     ballot_store: DataStore[BallotId, SubmittedBallot]
-    signed_ballot_store: DataStore[BallotId, SignedSubmittedBallot]
+    signed_ballot_store: DataStore[SchnorrPublicKey, SignedSubmittedBallot]
     ballot_box: BallotBox
     submitted_spoiled_ballots: Dict[BallotId, SubmittedBallot]
 
@@ -245,7 +254,7 @@ class TestEndToEndElection(BaseTestCase):
         # ROUND 2: Election Partial Key Backup Sharing
         # Share Backups
         for sending_guardian in self.guardians:
-            sending_guardian.generate_election_partial_key_backups()
+            _ = sending_guardian.generate_election_partial_key_backups()
             backups = []
             for designated_guardian in self.guardians:
                 if designated_guardian.id != sending_guardian.id:
@@ -309,8 +318,10 @@ class TestEndToEndElection(BaseTestCase):
         )
 
         # Build the Election
-        self.election_builder.set_public_key(get_optional(joint_key).joint_public_key)
-        self.election_builder.set_commitment_hash(
+        _ = self.election_builder.set_public_key(
+            get_optional(joint_key).joint_public_key
+        )
+        _ = self.election_builder.set_commitment_hash(
             get_optional(joint_key).commitment_hash
         )
         self.internal_manifest, self.context = get_optional(
@@ -322,13 +333,8 @@ class TestEndToEndElection(BaseTestCase):
 
     def step_register_voters(self) -> None:
         """
-        Load a fixed set of voters and their corresponding ballots from fixture
-        files, matched 1:1 by object_id with each voter's ballot_style_id
-        matching its ballot's style_id. Then use NUMBER_OF_REGISTRARS
-        registrars to generate one credential share per voter, publish those
-        shares to a CredentialRegistry (kept partitioned per ballot style),
-        and have each voter locally aggregate its own shares (via MuSig) into
-        the signing credential it will use in step_sign_votes.
+        Load the voters, let every registrar generate a credential share for each voter
+        and publish the shares in the credential registry.
         """
 
         self.plaintext_ballots = BallotFactory().get_simple_ballots_from_file()
@@ -353,15 +359,19 @@ class TestEndToEndElection(BaseTestCase):
                 voters_per_style.get(voter.ballot_style_id, 0) + 1
             )
 
-        # Setup Registrars: each generates its own credential share for every voter.
+        # Setup Registrars
         for i in range(self.NUMBER_OF_REGISTRARS):
             registrar = Registrar(f"registrar-{i}", i, self.electoral_roll)
-            self.assertTrue(registrar.verify_electoral_roll_pedesen_commitment(commitment, opening))
+            self.assertTrue(
+                registrar.verify_electoral_roll_commitment(commitment, opening)
+            )
             registrar.generate_credentials()
             self.registrars.append(registrar)
 
-        # Publish every registrar's shares to a public CredentialRegistry, per ballot style.
-        ordered_registrars = sorted(self.registrars, key=lambda registrar: registrar.sequence_order)
+        # Publish the Credential Registry
+        ordered_registrars = sorted(
+            self.registrars, key=lambda registrar: registrar.sequence_order
+        )
         shares_by_style = {
             ballot_style_id: [
                 registrar.publish_public_credentials_for_style(ballot_style_id)
@@ -387,14 +397,13 @@ class TestEndToEndElection(BaseTestCase):
                 registrar.verify_registration(self.credential_registry),
             )
 
-        # Each voter aggregates its own shares (in registrar sequence_order) into its credential.
+        # Aggregate the Credentials
         for voter in self.electoral_roll.voters:
             shares = [
                 registrar.send_credential_to_voter(voter.object_id)
                 for registrar in ordered_registrars
             ]
             self.key_pairs[voter.object_id] = aggregate_key_pair(shares)
-
 
     def step_encrypt_votes(self) -> None:
         """
@@ -427,7 +436,6 @@ class TestEndToEndElection(BaseTestCase):
             signed_ballot = sign(ballot, key_pair)
             assert signed_ballot is not None
             self.signed_ballots.append(signed_ballot)
-
 
     def step_cast_and_spoil(self) -> None:
         """
@@ -467,9 +475,16 @@ class TestEndToEndElection(BaseTestCase):
 
         # Generate a Homomorphically Accumulated Tally of the ballots
         self.ciphertext_tally = get_optional(
-            tally_signed_ballots(self.signed_ballot_store, self.internal_manifest, self.context, self.credential_registry)
+            tally_signed_ballots(
+                self.ballot_store,
+                self.internal_manifest,
+                self.context,
+                self.credential_registry,
+            )
         )
-        self.submitted_spoiled_ballots = get_ballots(self.ballot_store, BallotBoxState.SPOILED)
+        self.submitted_spoiled_ballots = get_ballots(
+            self.ballot_store, BallotBoxState.SPOILED
+        )
         self._assert_message(
             tally_ballots.__qualname__,
             f"""
@@ -622,6 +637,9 @@ class TestEndToEndElection(BaseTestCase):
             self.guardian_records,
             self.lagrange_coefficients,
         )
+        _ = to_file(
+            self.credential_registry, CREDENTIAL_REGISTRY_FILE_NAME, ELECTION_RECORD_DIR
+        )
         self._assert_message(
             "Publish",
             f"Election Record published to: {ELECTION_RECORD_DIR}",
@@ -640,10 +658,12 @@ class TestEndToEndElection(BaseTestCase):
         )
 
         ZIP_SUFFIX = "zip"
-        make_archive(ELECTION_RECORD_DIR, ZIP_SUFFIX, ELECTION_RECORD_DIR)
-        make_archive(PRIVATE_DATA_DIR, ZIP_SUFFIX, PRIVATE_DATA_DIR)
+        _ = make_archive(ELECTION_RECORD_DIR, ZIP_SUFFIX, ELECTION_RECORD_DIR)
+        _ = make_archive(PRIVATE_DATA_DIR, ZIP_SUFFIX, PRIVATE_DATA_DIR)
 
         self.deserialize_data()
+        self.verify_record_with_unmodified_verifier()
+        self.verify_record_with_extended_verifier()
 
         if self.REMOVE_RAW_OUTPUT:
             rmtree(ELECTION_RECORD_DIR)
@@ -742,6 +762,102 @@ class TestEndToEndElection(BaseTestCase):
                 ),
             )
             self.assertEqualAsDicts(guardian_record, guardian_record_from_file)
+
+    def verify_record_with_unmodified_verifier(self) -> None:
+        """Verify the published record with the verifier of unextended ElectionGuard."""
+        manifest = from_file(
+            Manifest, construct_path(MANIFEST_FILE_NAME, ELECTION_RECORD_DIR)
+        )
+        context = from_file(
+            CiphertextElectionContext,
+            construct_path(CONTEXT_FILE_NAME, ELECTION_RECORD_DIR),
+        )
+        plaintext_tally = from_file(
+            PlaintextTally, construct_path(TALLY_FILE_NAME, ELECTION_RECORD_DIR)
+        )
+        submitted_ballots = [
+            from_file(
+                SubmittedBallot,
+                construct_path(
+                    SUBMITTED_BALLOT_PREFIX + ballot.object_id,
+                    submitted_ballots_directory,
+                ),
+            )
+            for ballot in self.ballot_store.all()
+        ]
+
+        for ballot in submitted_ballots:
+            self._assert_message(
+                verify_ballot.__qualname__,
+                f"Ballot Id: {ballot.object_id}",
+                verify_ballot(ballot, manifest, context).verified,
+            )
+
+        self._assert_message(
+            verify_aggregation.__qualname__,
+            "Tally is the aggregation of the submitted ballots",
+            verify_aggregation(
+                submitted_ballots, self.ciphertext_tally, manifest, context
+            ).verified,
+        )
+
+        election_public_keys = {
+            guardian.id: guardian.share_key() for guardian in self.guardians
+        }
+        self._assert_message(
+            verify_decryption.__qualname__,
+            "Tally is correctly decrypted",
+            verify_decryption(plaintext_tally, election_public_keys, context).verified,
+        )
+
+    def verify_record_with_extended_verifier(self) -> None:
+        """Verify the published record with the checks added by the extension."""
+        registry = from_file(
+            CredentialRegistry,
+            construct_path(CREDENTIAL_REGISTRY_FILE_NAME, ELECTION_RECORD_DIR),
+        )
+        self._assert_message(
+            verify_credential_registry.__qualname__,
+            "Published credential registry is valid",
+            verify_credential_registry(registry).verified,
+        )
+
+        board: List[SubmittedBallot] = []
+        for ballot in self.ballot_store.all():
+            # cast ballots are signed, spoiled ballots are not
+            ballot_from_file = from_file(
+                (
+                    SignedSubmittedBallot
+                    if ballot.state == BallotBoxState.CAST
+                    else SubmittedBallot
+                ),
+                construct_path(
+                    SUBMITTED_BALLOT_PREFIX + ballot.object_id,
+                    submitted_ballots_directory,
+                ),
+            )
+            board.append(ballot_from_file)
+            if isinstance(ballot_from_file, SignedSubmittedBallot):
+                self._assert_message(
+                    verify_ballot_eligibility.__qualname__,
+                    f"Ballot Id: {ballot.object_id}",
+                    verify_ballot_eligibility(ballot_from_file, registry).verified,
+                )
+
+        manifest = from_file(
+            Manifest, construct_path(MANIFEST_FILE_NAME, ELECTION_RECORD_DIR)
+        )
+        context = from_file(
+            CiphertextElectionContext,
+            construct_path(CONTEXT_FILE_NAME, ELECTION_RECORD_DIR),
+        )
+        self._assert_message(
+            verify_aggregation_with_credentials.__qualname__,
+            "Tally is the aggregation of the eligible ballots on the board",
+            verify_aggregation_with_credentials(
+                board, self.ciphertext_tally, registry, manifest, context
+            ).verified,
+        )
 
     def _assert_message(
         self, name: str, message: str, condition: Union[Callable, bool] = True

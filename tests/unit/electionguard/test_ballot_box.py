@@ -1,7 +1,8 @@
 from dataclasses import replace
+from typing import Optional
 
 import electionguard_tools.factories.election_factory as ElectionFactory
-from electionguard.ballot import BallotBoxState
+from electionguard.ballot import BallotBoxState, SignedSubmittedBallot, SubmittedBallot
 from electionguard.ballot_box import (
     BallotBox,
     cast_ballot,
@@ -9,14 +10,18 @@ from electionguard.ballot_box import (
     submit_ballot,
     submit_ballot_to_box,
 )
-from electionguard.credential_registry import CredentialRegistry, make_credential_registry
+from electionguard.credential_registry import (
+    CredentialRegistry,
+    make_credential_registry,
+)
 from electionguard.data_store import DataStore
 from electionguard.elgamal import elgamal_keypair_from_secret
 from electionguard.encrypt import encrypt_ballot
 from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q
 from electionguard.musig import aggregate_key_pair
-from electionguard.schnorr_signature import schnorr_keypair_random
+from electionguard.schnorr_signature import SchnorrPublicKey, schnorr_keypair_random
 from electionguard.sign import sign
+from electionguard.type import BallotId
 from electionguard.utils import get_optional
 from tests.base_test_case import BaseTestCase
 
@@ -212,23 +217,22 @@ class TestBallotBox(BaseTestCase):
         self.assertEqual(submitted_ballot.state, BallotBoxState.CAST)
         self.assertEqual(encrypted_ballot.object_id, submitted_ballot.object_id)
 
-    def _make_signed_ballot(self):
-        """
-        Builds a signed ballot the way a real voter would: `share` is the one
-        registrar share this test uses (what gets registered), and the
-        ballot is actually signed with the MuSig-aggregated credential
-        derived from it (aggregation applies a coefficient even for a single
-        share, so the two are not the same key).
-        """
+    def _make_signed_ballot(self, share=None, ballot_id=None):
+        """Returns a ballot signed with the credential aggregated from `share`, and `share`."""
+        plaintext_ballot = (
+            self.ballot
+            if ballot_id is None
+            else replace(self.ballot, object_id=ballot_id)
+        )
         encrypted_ballot = get_optional(
             encrypt_ballot(
-                self.ballot,
+                plaintext_ballot,
                 self.internal_manifest,
                 self.context,
                 self.seed,
             )
         )
-        share = schnorr_keypair_random()
+        share = share if share is not None else schnorr_keypair_random()
         credential = aggregate_key_pair([share])
         return sign(encrypted_ballot, credential), share
 
@@ -239,13 +243,29 @@ class TestBallotBox(BaseTestCase):
             shares_by_style={style_id: [list(public_keys)]},
         )
 
-    def test_ballot_box_cast_signed_ballot_with_registered_credential(self) -> None:
-        signed_ballot, key_pair = self._make_signed_ballot()
-        registry = self._registered_registry(signed_ballot.style_id, key_pair.public_key)
-        store: DataStore = DataStore()
-        ballot_box = BallotBox(
-            self.internal_manifest, self.context, store, _credential_registry=registry
+    def _signed_ballot_box(
+        self,
+        registry: CredentialRegistry,
+        store: DataStore[BallotId, SubmittedBallot],
+        signed_store: Optional[
+            DataStore[SchnorrPublicKey, SignedSubmittedBallot]
+        ] = None,
+    ) -> BallotBox:
+        return BallotBox(
+            self.internal_manifest,
+            self.context,
+            store,
+            signed_store if signed_store is not None else DataStore(),
+            registry,
         )
+
+    def test_ballot_box_cast_signed_ballot(self) -> None:
+        signed_ballot, key_pair = self._make_signed_ballot()
+        registry = self._registered_registry(
+            signed_ballot.style_id, key_pair.public_key
+        )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
 
         submitted_ballot = ballot_box.cast_signed(signed_ballot)
 
@@ -255,68 +275,45 @@ class TestBallotBox(BaseTestCase):
         self.assertIsNotNone(ballot_in_box)
         self.assertEqual(ballot_in_box.state, BallotBoxState.CAST)
 
-    def test_ballot_box_cast_signed_ballot_rejected_without_a_registry(self) -> None:
+    def test_ballot_box_cast_signed_ballot_without_registry(self) -> None:
         signed_ballot, _ = self._make_signed_ballot()
-        store: DataStore = DataStore()
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
         ballot_box = BallotBox(self.internal_manifest, self.context, store)
 
         self.assertIsNone(ballot_box.cast_signed(signed_ballot))
         self.assertIsNone(store.get(signed_ballot.object_id))
 
-    def test_ballot_box_cast_signed_ballot_rejected_when_credential_not_registered(
+    def test_ballot_box_cast_signed_ballot_unregistered(
         self,
     ) -> None:
         signed_ballot, _ = self._make_signed_ballot()
         other_key_pair = schnorr_keypair_random()
-        registry = self._registered_registry(signed_ballot.style_id, other_key_pair.public_key)
-        store: DataStore = DataStore()
-        ballot_box = BallotBox(
-            self.internal_manifest, self.context, store, _credential_registry=registry
+        registry = self._registered_registry(
+            signed_ballot.style_id, other_key_pair.public_key
         )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
 
         self.assertIsNone(ballot_box.cast_signed(signed_ballot))
         self.assertIsNone(store.get(signed_ballot.object_id))
 
-    def test_ballot_box_cast_signed_ballot_rejected_when_signature_invalid(self) -> None:
-        # Tamper with the signature itself (not crypto_hash/public_credential) so this
-        # exercises verify_signature() specifically, rather than being rejected earlier
-        # by the pre-existing encryption-validity check or the registration check.
+    def test_ballot_box_cast_signed_ballot_invalid_signature(self) -> None:
         signed_ballot, key_pair = self._make_signed_ballot()
-        registry = self._registered_registry(signed_ballot.style_id, key_pair.public_key)
+        registry = self._registered_registry(
+            signed_ballot.style_id, key_pair.public_key
+        )
         tampered_signature = replace(
             signed_ballot.signature,
             response=add_q(signed_ballot.signature.response, ONE_MOD_Q),
         )
         tampered_ballot = replace(signed_ballot, signature=tampered_signature)
-        store: DataStore = DataStore()
-        ballot_box = BallotBox(
-            self.internal_manifest, self.context, store, _credential_registry=registry
-        )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
 
         self.assertIsNone(ballot_box.cast_signed(tampered_ballot))
         self.assertIsNone(store.get(tampered_ballot.object_id))
 
-    def test_ballot_box_cast_ballot_unaffected_by_missing_registry(self) -> None:
-        # Unsigned casting must keep working with no credential registry at all.
-        encrypted_ballot = get_optional(
-            encrypt_ballot(
-                self.ballot,
-                self.internal_manifest,
-                self.context,
-                self.seed,
-            )
-        )
-        store: DataStore = DataStore()
-        ballot_box = BallotBox(self.internal_manifest, self.context, store)
-
-        submitted_ballot = ballot_box.cast(encrypted_ballot)
-
-        self.assertIsNotNone(submitted_ballot)
-        self.assertEqual(submitted_ballot.state, BallotBoxState.CAST)
-
-    def test_ballot_box_cast_rejected_when_registry_is_configured(self) -> None:
-        # An election that has a credential registry requires signed ballots;
-        # unsigned cast() must be refused, not silently accepted.
+    def test_ballot_box_cast_unsigned_ballot_with_registry(self) -> None:
         encrypted_ballot = get_optional(
             encrypt_ballot(
                 self.ballot,
@@ -328,10 +325,82 @@ class TestBallotBox(BaseTestCase):
         registry = make_credential_registry(
             number_of_registrars=1, number_of_eligible_voters={}, shares_by_style={}
         )
-        store: DataStore = DataStore()
-        ballot_box = BallotBox(
-            self.internal_manifest, self.context, store, _credential_registry=registry
-        )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
 
         self.assertIsNone(ballot_box.cast(encrypted_ballot))
         self.assertIsNone(store.get(encrypted_ballot.object_id))
+
+    def test_ballot_box_cast_signed_ballot_credential_used(
+        self,
+    ) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        second_signed_ballot, _ = self._make_signed_ballot(
+            share, ballot_id="second-ballot"
+        )
+        registry = self._registered_registry(signed_ballot.style_id, share.public_key)
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
+
+        self.assertIsNotNone(ballot_box.cast_signed(signed_ballot))
+        self.assertIsNone(ballot_box.cast_signed(second_signed_ballot))
+        self.assertIsNone(store.get(second_signed_ballot.object_id))
+        self.assertEqual(len(store), 1)
+
+    def test_ballot_box_cast_signed_ballot_id_used(
+        self,
+    ) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        same_id_ballot, other_share = self._make_signed_ballot()
+        registry = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={signed_ballot.style_id: 2},
+            shares_by_style={
+                signed_ballot.style_id: [[share.public_key, other_share.public_key]]
+            },
+        )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        signed_store: DataStore[SchnorrPublicKey, SignedSubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store, signed_store)
+
+        self.assertIsNotNone(ballot_box.cast_signed(signed_ballot))
+        self.assertIsNone(ballot_box.cast_signed(same_id_ballot))
+        self.assertEqual(
+            get_optional(store.get(signed_ballot.object_id)).public_credential,
+            signed_ballot.public_credential,
+        )
+        # the rejected ballot must not use up its credential
+        self.assertIsNone(signed_store.get(same_id_ballot.public_credential))
+
+    def test_ballot_box_cast_signed_ballot_invalid(
+        self,
+    ) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        registry = self._registered_registry(signed_ballot.style_id, share.public_key)
+        invalid_ballot = replace(
+            signed_ballot, manifest_hash=add_q(signed_ballot.manifest_hash, ONE_MOD_Q)
+        )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
+
+        self.assertTrue(invalid_ballot.verify_signature())
+        self.assertIsNone(ballot_box.cast_signed(invalid_ballot))
+        self.assertIsNone(store.get(invalid_ballot.object_id))
+
+    def test_ballot_box_cast_signed_ballot_other_style(
+        self,
+    ) -> None:
+        signed_ballot, share = self._make_signed_ballot()
+        registry = make_credential_registry(
+            number_of_registrars=1,
+            number_of_eligible_voters={signed_ballot.style_id: 0, "other-style": 1},
+            shares_by_style={
+                signed_ballot.style_id: [[]],
+                "other-style": [[share.public_key]],
+            },
+        )
+        store: DataStore[BallotId, SubmittedBallot] = DataStore()
+        ballot_box = self._signed_ballot_box(registry, store)
+
+        self.assertIsNone(ballot_box.cast_signed(signed_ballot))
+        self.assertIsNone(store.get(signed_ballot.object_id))

@@ -167,7 +167,7 @@ def verify_aggregation_with_credentials(
                 )
             used_credentials.add(credential)
 
-        new_tally.append_signed_ballot(ballot, credential_registry, True)
+        _ = new_tally.append_signed_ballot(ballot, credential_registry, True)
 
     if (
         isinstance(tally, CiphertextTally)

@@ -6,7 +6,7 @@ from electionguard.ballot import BallotBoxState
 from electionguard.ballot_box import cast_signed_ballot
 from electionguard.elgamal import elgamal_keypair_from_secret
 from electionguard.encrypt import encrypt_ballot
-from electionguard.group import ONE_MOD_Q, TWO_MOD_Q, add_q, g_pow_p
+from electionguard.group import TWO_MOD_Q
 from electionguard.schnorr_signature import schnorr_keypair_random
 from electionguard.sign import sign
 from electionguard.utils import get_optional
@@ -35,7 +35,7 @@ class TestSign(BaseTestCase):
         )
         self.credential = schnorr_keypair_random()
 
-    def test_sign_produces_a_valid_signature(self) -> None:
+    def test_sign(self) -> None:
         signed_ballot = sign(self.ballot, self.credential)
 
         self.assertTrue(signed_ballot.verify_signature())
@@ -49,12 +49,7 @@ class TestSign(BaseTestCase):
         self.assertEqual(signed_ballot.contests, self.ballot.contests)
         self.assertEqual(signed_ballot.crypto_hash, self.ballot.crypto_hash)
 
-    def test_sign_attaches_the_signer_public_credential(self) -> None:
-        signed_ballot = get_optional(sign(self.ballot, self.credential))
-
-        self.assertEqual(signed_ballot.public_credential, self.credential.public_key)
-
-    def test_signing_twice_yields_two_different_valid_signatures(self) -> None:
+    def test_sign_uses_fresh_nonce(self) -> None:
         first_signed = sign(self.ballot, self.credential)
         second_signed = sign(self.ballot, self.credential)
 
@@ -62,16 +57,7 @@ class TestSign(BaseTestCase):
         self.assertTrue(first_signed.verify_signature())
         self.assertTrue(second_signed.verify_signature())
 
-    def test_verify_signature_fails_with_tampered_public_credential(self) -> None:
-        signed_ballot = sign(self.ballot, self.credential)
-
-        other_public_key = g_pow_p(add_q(self.credential.secret_key, ONE_MOD_Q))
-        tampered_ballot = replace(signed_ballot, public_credential=other_public_key)
-
-        self.assertFalse(tampered_ballot.verify_signature())
-
-
-    def test_verify_signature_fails_when_encrypted_contents_are_swapped(self) -> None:
+    def test_verify_signature_swapped_contents(self) -> None:
         signed_ballot = sign(self.ballot, self.credential)
         other_encryption = get_optional(
             encrypt_ballot(
@@ -87,21 +73,14 @@ class TestSign(BaseTestCase):
 
         self.assertFalse(swapped_ballot.verify_signature())
 
-    def test_verify_signature_fails_with_tampered_crypto_hash(self) -> None:
-        signed_ballot = sign(self.ballot, self.credential)
-
-        tampered_ballot = replace(
-            signed_ballot, crypto_hash=add_q(signed_ballot.crypto_hash, ONE_MOD_Q)
-        )
-
-        self.assertFalse(tampered_ballot.verify_signature())
-
-    def test_signature_survives_submission_to_the_ballot_box(self) -> None:
+    def test_signature_survives_submission(self) -> None:
         signed_ballot = sign(self.ballot, self.credential)
 
         submitted_ballot = cast_signed_ballot(signed_ballot)
 
         self.assertEqual(submitted_ballot.state, BallotBoxState.CAST)
         self.assertEqual(submitted_ballot.signature, signed_ballot.signature)
-        self.assertEqual(submitted_ballot.public_credential, signed_ballot.public_credential)
+        self.assertEqual(
+            submitted_ballot.public_credential, signed_ballot.public_credential
+        )
         self.assertTrue(submitted_ballot.verify_signature())

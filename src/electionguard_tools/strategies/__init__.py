@@ -1,6 +1,7 @@
 from electionguard_tools.strategies import election
 from electionguard_tools.strategies import elgamal
 from electionguard_tools.strategies import group
+from electionguard_tools.strategies import schnorr
 
 from electionguard_tools.strategies.election import (
     CiphertextElectionsTupleType,
@@ -39,6 +40,9 @@ from electionguard_tools.strategies.group import (
     elements_mod_q,
     elements_mod_q_no_zero,
 )
+from electionguard_tools.strategies.schnorr import (
+    schnorr_keypairs,
+)
 
 __all__ = [
     "CiphertextElectionsTupleType",
@@ -74,5 +78,7 @@ __all__ = [
     "plaintext_voted_ballots",
     "referendum_contest_descriptions",
     "reporting_unit_types",
+    "schnorr",
+    "schnorr_keypairs",
     "two_letter_codes",
 ]

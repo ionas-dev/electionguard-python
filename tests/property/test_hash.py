@@ -3,14 +3,18 @@ from typing import List, Optional
 from hypothesis import given
 from hypothesis.strategies import integers
 
-
-from tests.base_test_case import BaseTestCase
-
 from electionguard.big_integer import BigInteger
 from electionguard.group import ElementModP, ElementModQ
-from electionguard.hash import hash_elems
+from electionguard.hash import (
+    hash_elems,
+    hash_elems_agg,
+    hash_elems_com,
+    hash_elems_sig,
+)
 from electionguard_tools.strategies.group import elements_mod_p, elements_mod_q
+from tests.base_test_case import BaseTestCase
 
+TAGGED_HASHES = (hash_elems_com, hash_elems_agg, hash_elems_sig)
 
 class TestHash(BaseTestCase):
     """Hash tests"""
@@ -107,3 +111,11 @@ class TestHash(BaseTestCase):
 
         self.assertNotEqual(nested_hash, non_nested_1)
         self.assertEqual(nested_hash, non_nested_2)
+
+    @given(elements_mod_p(), elements_mod_q())
+    def test_domains_differ(self, a: ElementModP, b: ElementModQ) -> None:
+        hashes = [hash_elems(a, b)] + [
+            tagged_hash(a, b) for tagged_hash in TAGGED_HASHES
+        ]
+
+        self.assertEqual(len(set(hashes)), len(hashes))
